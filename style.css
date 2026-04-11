@@ -455,52 +455,13 @@ body {
 .porque-section { padding: 120px 60px; position: relative; z-index: 1; text-align: center; }
 .porque-header { margin-bottom: 72px; display: flex; flex-direction: column; align-items: center; }
 .porque-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; max-width: 1100px; margin: 0 auto; }
-.porque-card {
-  height: 220px; cursor: pointer;
-  perspective: 1000px;
-  border-radius: 24px;
-}
-.porque-card-inner {
-  position: relative; width: 100%; height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.6s var(--ease-smooth);
-  border-radius: 24px;
-}
-.porque-card:hover .porque-card-inner,
-.porque-card.flipped .porque-card-inner { transform: rotateY(180deg); }
-.porque-card-front,
-.porque-card-back {
-  position: absolute; inset: 0; border-radius: 24px;
-  backface-visibility: hidden; -webkit-backface-visibility: hidden;
-  border: 1px solid rgba(255,255,255,0.9);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-}
-.porque-card-front {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 16px;
-  background: var(--black);
-}
-.porque-card-back {
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 28px; text-align: left;
-  transform: rotateY(180deg);
-  background: rgba(255,255,255,0.95);
-}
-.porque-icon {
-  width: 64px; height: 64px;
-  background: #0071e3;
-  border-radius: 18px;
-  display: flex; align-items: center; justify-content: center;
-}
-.porque-icon svg { width: 28px; height: 28px; fill: #fff; }
-.porque-front-label {
-  font-size: 13px; font-weight: 600;
-  color: rgba(255,255,255,0.8);
-  letter-spacing: 0.04em; text-transform: uppercase;
-}
+.porque-card { background: rgba(255,255,255,0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.9); border-radius: 24px; padding: 36px 28px 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); transition: transform 0.3s var(--ease-spring), box-shadow 0.3s var(--ease-smooth); text-align: left; }
+.porque-card:hover { transform: translateY(-6px); box-shadow: 0 20px 48px rgba(0,0,0,0.10); }
+.porque-icon { width: 48px; height: 48px; background: var(--black); border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; }
+.porque-icon svg { width: 22px; height: 22px; fill: #fff; }
 .porque-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--black); margin-bottom: 10px; }
 .porque-desc { font-size: 13px; color: var(--gray-mid); line-height: 1.7; }
+
 
 /* ══════════════════════════════════════════════
    CONTACTO
