@@ -38,8 +38,6 @@ const FEATURES = {
   'cargador-samsung-45w':       ['Carga ultra rápida 45W','Compatible línea Galaxy','Cable USB-C incluido','Carga completa en ~1 hora'],
 };
 
-/* Mapeo de nombres del carrusel → key real en PRICE_TIERS/FEATURES/PRODUCT_IMAGES
-   cuando el slide usa un nombre distinto al de la card de la grilla             */
 const SLIDE_KEY_MAP = {
   'airpods-max': 'max-magnéticos',
 };
@@ -252,6 +250,40 @@ const Cart = (() => {
     if(fi) gsap.fromTo(fi,{opacity:0,x:24},{opacity:1,x:0,duration:0.4,ease:'power3.out'});
   }
 
+  /* ── Mercado Pago ── */
+  async function openMercadoPago() {
+    if (!state.cart.length) return;
+    const btn = document.getElementById('mpBtn');
+    if (btn) { btn.textContent = 'Procesando...'; btn.disabled = true; }
+    try {
+      const items = state.cart.map(({product, qty}) => ({
+        name:  product.name,
+        qty:   qty,
+        price: product.rawPrice,
+      }));
+      const res = await fetch('/api/create-preference', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (data.init_point) {
+        window.location.href = data.init_point;
+      } else {
+        throw new Error('No se recibió init_point');
+      }
+    } catch(err) {
+      console.error('Error MP:', err);
+      if (btn) { btn.textContent = 'Error, intenta de nuevo'; btn.disabled = false; }
+      setTimeout(() => {
+        if (btn) {
+          btn.innerHTML = `<svg style="width:18px;height:18px;fill:currentColor;vertical-align:middle;margin-right:8px" viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>Pagar con Mercado Pago`;
+          btn.disabled = false;
+        }
+      }, 2500);
+    }
+  }
+
   function openWhatsApp() {
     if (!state.cart.length) return;
     const lines=state.cart.map(({product,qty})=>{
@@ -268,6 +300,7 @@ const Cart = (() => {
     DOM.closeCart.addEventListener('click', close);
     DOM.cartOverlay.addEventListener('click', close);
     document.getElementById('checkoutBtn')?.addEventListener('click', openWhatsApp);
+    document.getElementById('mpBtn')?.addEventListener('click', openMercadoPago);
   }
 
   return { init, addItem, open, close };
@@ -410,7 +443,6 @@ const ProductModal = (() => {
     btn.classList.toggle('hidden', isTemp || imgIndex>=imgList.length-1);
   }
 
-  /* ── Modo TEMP: mostrar todas las miniaturas reales antes de que el usuario elija ── */
   function renderTempThumbs(){
     const wrap=document.getElementById('ppageThumbs');
     if(!wrap) return;
@@ -427,17 +459,14 @@ const ProductModal = (() => {
     });
   }
 
-  /* ── Al hacer click en miniatura: imagen temp → imagen real ── */
   function activateFromTemp(newIndex){
     isTemp=false;
     const imgEl=document.getElementById('ppageImg');
     const imgWrap=document.getElementById('ppageImgWrap');
     const wrap=document.getElementById('ppageThumbs');
 
-    /* Limpiar miniaturas y re-agregar solo las que van antes del índice elegido */
     wrap.innerHTML='';
     for(let i=0;i<newIndex;i++) addThumb(imgList[i],i);
-
     imgIndex=newIndex;
 
     const IMG_SCALES={
@@ -491,7 +520,6 @@ const ProductModal = (() => {
     const direction=newIndex>imgIndex?1:-1;
     const prevSrc=imgEl.src, prevIndex=imgIndex;
 
-    /* Precargar la imagen ANTES de animar → sin freeze en producción */
     const preloader = new Image();
     preloader.src = imgList[newIndex];
 
@@ -534,12 +562,11 @@ const ProductModal = (() => {
       renderDots(); updateArrow();
     }
 
-    /* Si ya está cargada → animar de inmediato, si no → esperar */
     if(preloader.complete){
       doTransition();
     } else {
       preloader.onload  = doTransition;
-      preloader.onerror = doTransition; /* si falla igual animamos */
+      preloader.onerror = doTransition;
     }
   }
 
@@ -621,12 +648,10 @@ const ProductModal = (() => {
     if(inner) inner.innerHTML='<ul>'+feats.map(f=>`<li>${f}</li>`).join('')+'</ul>';
   }
 
-  /* ── helper imagen de card ── */
   function _getCardImg(card){
     return card?.querySelector('.card-img-wrap img')||card?.querySelector('.csl-img img')||null;
   }
 
-  /* ── limpiar todos los VT names ── */
   function clearVTNames(card){
     if(card) card.style.viewTransitionName = '';
     const ci=_getCardImg(card); if(ci) ci.style.viewTransitionName='';
@@ -634,58 +659,41 @@ const ProductModal = (() => {
     document.getElementById('ppageImg').style.viewTransitionName='';
   }
 
-  /* ── showModal: se ejecuta DENTRO del callback → estado "NEW"
-     CRÍTICO: limpiar VT names de la card después de ocultarla,
-     de lo contrario card (visibility:hidden) y ppage tienen el mismo
-     nombre en el new state → colisión → browser cancela la transición ── */
   function showModal(card){
     ppage.style.display='flex'; ppage.style.position='fixed';
     ppage.style.left='0'; ppage.style.top='0';
     ppage.style.width='100vw'; ppage.style.height='100vh';
     ppage.style.borderRadius='0'; ppage.style.overflow='hidden';
-    /* NEW state: solo ppage tiene los nombres */
     ppage.style.viewTransitionName='vt-container';
     document.getElementById('ppageImg').style.viewTransitionName='vt-image';
     ppage.classList.add('active');
     overlay.classList.add('active'); overlay.style.opacity='1';
-    /* Ocultar card Y limpiar sus nombres → no hay colisión */
     card.style.visibility='hidden';
     card.style.viewTransitionName='';
     const ci=_getCardImg(card); if(ci) ci.style.viewTransitionName='';
   }
 
-  /* ── hideModal: se ejecuta DENTRO del callback → estado "NEW"
-     Restaura la card con sus nombres para que sea el "new" state ── */
   function hideModal(targetCard){
     if(targetCard){
       targetCard.style.visibility='';
       targetCard.style.viewTransitionName='vt-container';
-      /* vt-image solo en grid — en carousel Swiper transforma el slide
-         continuamente y causa salto si mapeamos la imagen por separado */
       const isCarousel = targetCard.classList.contains('csl-slide');
       const ci=_getCardImg(targetCard);
       if(ci && !isCarousel) ci.style.viewTransitionName='vt-image';
     }
     ppage.classList.remove('active'); overlay.classList.remove('active');
     overlay.style.opacity='0';
-    /* Resetear opacidades y estado temp para la próxima apertura */
-    isTemp = false;
-    isAnimatingImg = false;
-    openingImage = '';
-    const ppageInfo = document.getElementById('ppageInfo');
-    if(ppageInfo) ppageInfo.style.opacity = '';
-    const pb = document.getElementById('ppageBack');
-    if(pb) pb.style.opacity = '';
-    /* ocultar ppage con propiedades individuales */
+    isTemp=false; isAnimatingImg=false; openingImage='';
+    const ppageInfo=document.getElementById('ppageInfo');
+    if(ppageInfo) ppageInfo.style.opacity='';
+    const pb=document.getElementById('ppageBack');
+    if(pb) pb.style.opacity='';
     ppage.style.display='none'; ppage.style.viewTransitionName='';
     document.getElementById('ppageImg').style.viewTransitionName='';
     if(targetCard) targetCard.classList.remove('animating');
     isOpen=false; currentProduct=null; originCard=null;
   }
 
-  /* ─────────────────────────────────────────────
-     OPEN — card morphs into modal
-  ───────────────────────────────────────────── */
   function open(card){
     if(isOpen) return;
     isOpen=true; originCard=card; qty=1; tiersOpen=false;
@@ -702,10 +710,8 @@ const ProductModal = (() => {
       image:    (card.querySelector('.card-img-wrap img')||card.querySelector('.dc-img img')||card.querySelector('.csl-img img'))?.src||'',
     };
 
-    /* Guardar la imagen que se usa para abrir → siempre cerrar con esta */
     openingImage = currentProduct.image;
 
-    /* Poblar modal ANTES de la transición */
     document.getElementById('ppageImg').src            = currentProduct.image;
     document.getElementById('ppageImg').alt            = currentProduct.name;
     document.getElementById('ppageName').textContent   = currentProduct.name;
@@ -720,21 +726,17 @@ const ProductModal = (() => {
     renderTiers(); updateTotal(); renderFeatures(key);
     resetCarousel(currentProduct.image, card.dataset.name, key);
 
-    /* Modo TEMP: si viene del carrusel, la imagen mostrada es temporal
-       → se muestran todas las miniaturas reales, sin flecha */
     const isCslSlide = card.classList.contains('csl-slide');
 
-    /* Limpiar estilos residuales ANTES de configurar el modo temp */
     ppage.querySelectorAll('*').forEach(el=>{
       el.style.opacity=''; el.style.transform=''; el.style.transition='';
     });
 
     if(isCslSlide){
       isTemp = true;
-      updateArrow(); /* ocultar flecha ANTES de que se vea */
+      updateArrow();
       renderTempThumbs();
     } else {
-      /* Si viene de la grid: arrancar en el índice que coincide con la imagen */
       const cardFileName = currentProduct.image.split('/').pop().split('?')[0];
       const matchIdx = imgList.findIndex(src => src.split('/').pop() === cardFileName);
       if(matchIdx > 0){
@@ -749,7 +751,6 @@ const ProductModal = (() => {
 
     originRect = card.getBoundingClientRect();
 
-    /* ── Fallback (Safari sin soporte / Firefox) ── */
     if(!document.startViewTransition){
       const cx=(originRect.left+originRect.width/2)/window.innerWidth*100;
       const cy=(originRect.top+originRect.height/2)/window.innerHeight*100;
@@ -762,54 +763,39 @@ const ProductModal = (() => {
       return;
     }
 
-    /* ── View Transition ──
-       OLD state: card + cardImg tienen los nombres (visibles antes del callback)
-       NEW state: ppage + ppageImg tienen los nombres (seteados dentro de showModal) */
-    /* Quitar shadow de la card img ANTES del snapshot →
-       old y new state tienen el mismo filter → sin parpadeo al final */
     card.style.viewTransitionName = 'vt-container';
     const ci = _getCardImg(card);
     if(ci){
       ci._savedFilter     = ci.style.filter;
       ci._savedTransition = ci.style.transition;
-      ci.style.transition = 'none';   /* deshabilitar transition para cambio instantáneo */
-      ci.style.filter     = 'none';   /* quitar shadow antes del snapshot */
-      ci.offsetHeight;                /* forzar reflow para que el browser lo aplique YA */
+      ci.style.transition = 'none';
+      ci.style.filter     = 'none';
+      ci.offsetHeight;
       ci.style.viewTransitionName = 'vt-image';
     }
 
     const t = document.startViewTransition(() => showModal(card));
+    const restoreCI = () => {
+      if(ci && ci._savedFilter !== undefined){
+        ci.style.transition = ci._savedTransition || '';
+        ci.style.filter     = ci._savedFilter;
+        delete ci._savedFilter; delete ci._savedTransition;
+      }
+    };
     t.finished
-      .then(() => {
-        clearVTNames(card);
-        if(ci && ci._savedFilter !== undefined){
-          ci.style.transition = ci._savedTransition || '';
-          ci.style.filter     = ci._savedFilter;
-          delete ci._savedFilter; delete ci._savedTransition;
-        }
-      })
+      .then(() => { clearVTNames(card); restoreCI(); })
       .catch(() => {
-        /* VT cancelada: limpiar y restaurar estado */
-        clearVTNames(card);
-        if(ci && ci._savedFilter !== undefined){
-          ci.style.transition = ci._savedTransition || '';
-          ci.style.filter     = ci._savedFilter;
-          delete ci._savedFilter; delete ci._savedTransition;
-        }
+        clearVTNames(card); restoreCI();
         card.style.visibility = '';
-        isOpen = false; currentProduct = null; originCard = null;
+        isOpen=false; currentProduct=null; originCard=null;
       });
   }
 
-  /* ─────────────────────────────────────────────
-     CLOSE — modal morphs back into card
-  ───────────────────────────────────────────── */
   function close(){
     if(!isOpen||!originRect) return;
 
     const targetCard = originCard;
 
-    /* ── Fallback ── */
     if(!document.startViewTransition){
       let rect=originRect;
       if(targetCard){ const f=targetCard.getBoundingClientRect(); if(f.width>0) rect=f; }
@@ -822,39 +808,51 @@ const ProductModal = (() => {
       return;
     }
 
-    /* Restaurar la imagen con la que se abrió → VT cierra con esa imagen
-       sin importar en qué imagen esté el usuario ahora */
-    const ppageImgEl = document.getElementById('ppageImg');
-    if(ppageImgEl && openingImage) ppageImgEl.src = openingImage;
+    const ppageImgEl   = document.getElementById('ppageImg');
+    const ppageImgWrap = document.getElementById('ppageImgWrap');
 
-    /* Ocultar texto del modal ANTES del snapshot → solo imagen y contenedor animan */
-    const ppageInfo = document.getElementById('ppageInfo');
-    if(ppageInfo) ppageInfo.style.opacity = '0';
-    const ppageBack = document.getElementById('ppageBack');
-    if(ppageBack) ppageBack.style.opacity = '0';
+    /* Garantizar que openingImage esté lista antes del snapshot */
+    const doCloseVT = () => {
+      /* Matar tweens GSAP para evitar scale residual en ppageImgWrap */
+      gsap.killTweensOf(ppageImgWrap);
+      gsap.killTweensOf(ppageImgEl);
+      if(ppageImgWrap){ ppageImgWrap.style.transform=''; ppageImgWrap.style.opacity=''; }
+      if(ppageImgEl)   ppageImgEl.style.transition='none';
+      if(ppageImgWrap) ppageImgWrap.style.setProperty('--ppage-img-scale','1');
+      if(ppageImgEl)   ppageImgEl.offsetHeight;
 
-    /* Aplicar border-radius ANTES del snapshot → sin pico durante la transición */
-    ppage.style.borderRadius = '20px';
+      const ppageInfo=document.getElementById('ppageInfo');
+      const ppageBack=document.getElementById('ppageBack');
+      if(ppageInfo) ppageInfo.style.opacity='0';
+      if(ppageBack) ppageBack.style.opacity='0';
 
-    /* Marcar documentElement (no body) para que el CSS :root.vt-closing funcione */
-    document.documentElement.classList.add('vt-closing');
+      ppage.style.borderRadius='20px';
+      document.documentElement.classList.add('vt-closing');
 
-    /* OLD state: ppage + ppageImg tienen los nombres */
-    const isCarousel = originCard?.classList.contains('csl-slide');
-    ppage.style.viewTransitionName = 'vt-container';
-    /* vt-image solo para grid — en carousel el Swiper transform causa salto */
-    if(ppageImgEl && !isCarousel) ppageImgEl.style.viewTransitionName = 'vt-image';
+      const isCarousel = originCard?.classList.contains('csl-slide');
+      ppage.style.viewTransitionName='vt-container';
+      if(ppageImgEl && !isCarousel) ppageImgEl.style.viewTransitionName='vt-image';
 
-    const t = document.startViewTransition(() => hideModal(targetCard));
-    t.finished
-      .then(() => {
-        clearVTNames(targetCard);
-      })
-      .catch(() => { clearVTNames(targetCard); hideModal(targetCard); })
-      .finally(() => { document.documentElement.classList.remove('vt-closing'); });
+      const t = document.startViewTransition(() => hideModal(targetCard));
+      t.finished
+        .then(()=>{
+          const ciClose = _getCardImg(targetCard);
+          if(ciClose) ciClose.style.opacity='0';
+          clearVTNames(targetCard);
+          requestAnimationFrame(()=>{ requestAnimationFrame(()=>{ if(ciClose) ciClose.style.opacity=''; }); });
+        })
+        .catch(()=>{ clearVTNames(targetCard); hideModal(targetCard); })
+        .finally(()=>{ document.documentElement.classList.remove('vt-closing'); });
+    };
+
+    if(ppageImgEl && openingImage){
+      ppageImgEl.src = openingImage;
+      ppageImgEl.decode().then(doCloseVT).catch(doCloseVT);
+    } else {
+      doCloseVT();
+    }
   }
 
-  /* ── INIT ── */
   function init(){
     ppage.style.display='none';
     overlay.style.opacity='0';
@@ -987,21 +985,14 @@ const Carousel3D = (() => {
     swiper.on('sliderMove',()=>{wasDragged=true;});
     swiper.on('touchStart',()=>{wasDragged=false;});
     swiper.on('slideChangeTransitionEnd',()=>{
-      if(pendingOpen!==null){const s=pendingOpen;pendingOpen=null;openFromSlide(s);}
+      if(pendingOpen!==null){const s=pendingOpen;pendingOpen=null;ProductModal.open(s);}
     });
-
-    function openFromSlide(slide){
-      /* Abrir directamente desde el slide → la animación VT parte del carrusel,
-         no de la card del grid. El slide tiene todos los data-attributes necesarios
-         y la imagen en .csl-img img que _getCardImg ya sabe encontrar. */
-      ProductModal.open(slide);
-    }
 
     document.querySelectorAll('.csl-swiper .swiper-slide[data-name]').forEach((slide,i)=>{
       slide.addEventListener('click',()=>{
         if(wasDragged) return;
         if(!slide.classList.contains('swiper-slide-active')){pendingOpen=slide;swiper.slideTo(i);return;}
-        openFromSlide(slide);
+        ProductModal.open(slide);
       });
     });
   }
