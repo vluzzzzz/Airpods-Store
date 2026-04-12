@@ -422,39 +422,54 @@ const ProductModal = (() => {
     const imgWrap=document.getElementById('ppageImgWrap');
     const direction=newIndex>imgIndex?1:-1;
     const prevSrc=imgEl.src, prevIndex=imgIndex;
-    if(direction>0){
-      addThumb(prevSrc,prevIndex);
-    } else {
-      const wrap=document.getElementById('ppageThumbs');
-      wrap.querySelectorAll('.ppage-thumb').forEach(thumb=>{
-        if(Number(thumb.dataset.index)>=newIndex)
-          gsap.to(thumb,{opacity:0,y:20,scale:0.8,duration:0.25,ease:'power2.in',onComplete:()=>thumb.remove()});
-      });
-    }
-    imgIndex=newIndex;
-    gsap.to(imgWrap,{
-      x:direction>0?-60:60,opacity:0,scale:0.88,duration:0.3,ease:'power3.in',
-      onComplete:()=>{
-        imgEl.src=imgList[imgIndex];
-        const IMG_SCALES={
-          'apple-watch-ultra-3':      [1,1,1],
-          'apple-watch-serie-10':     [1,1,0.75],
-          'apple-watch-black-ultra-2':[1,0.75,0.75],
-          'airpods-4ta-generacion':   [1,1,1.3],
-          'airpods-pro-2':            [1,1,1],
-          'airpods-3ra-generacion':   [1,1,1],
-          'bateria-magsafe':          [1,1,1],
-          'max-magneticos':           [1,1,1],
-          'cargador-lightning-completo':[1,1.4,1],
-          'cargador-tipo-c-completo': [1,1,1],
-          'cargador-samsung-45w':     [1,1,1],
-        };
-        const s=(IMG_SCALES[getImgSlug(currentProduct.name)]??[1,1,1])[imgIndex]??1;
-        document.getElementById('ppageImgWrap').style.setProperty('--ppage-img-scale',s);
-        gsap.fromTo(imgWrap,{x:direction>0?80:-80,opacity:0,scale:0.88},{x:0,opacity:1,scale:1,duration:0.45,ease:'power3.out'});
+
+    /* Precargar la imagen ANTES de animar → sin freeze en producción */
+    const preloader = new Image();
+    preloader.src = imgList[newIndex];
+
+    function doTransition(){
+      if(direction>0){
+        addThumb(prevSrc,prevIndex);
+      } else {
+        const wrap=document.getElementById('ppageThumbs');
+        wrap.querySelectorAll('.ppage-thumb').forEach(thumb=>{
+          if(Number(thumb.dataset.index)>=newIndex)
+            gsap.to(thumb,{opacity:0,y:20,scale:0.8,duration:0.25,ease:'power2.in',onComplete:()=>thumb.remove()});
+        });
       }
-    });
-    renderDots(); updateArrow();
+      imgIndex=newIndex;
+      gsap.to(imgWrap,{
+        x:direction>0?-60:60,opacity:0,scale:0.88,duration:0.3,ease:'power3.in',
+        onComplete:()=>{
+          imgEl.src=imgList[imgIndex];
+          const IMG_SCALES={
+            'apple-watch-ultra-3':      [1,1,1],
+            'apple-watch-serie-10':     [1,1,0.75],
+            'apple-watch-black-ultra-2':[1,0.75,0.75],
+            'airpods-4ta-generacion':   [1,1,1.3],
+            'airpods-pro-2':            [1,1,1],
+            'airpods-3ra-generacion':   [1,1,1],
+            'bateria-magsafe':          [1,1,1],
+            'max-magneticos':           [1,1,1],
+            'cargador-lightning-completo':[1,1.4,1],
+            'cargador-tipo-c-completo': [1,1,1],
+            'cargador-samsung-45w':     [1,1,1],
+          };
+          const s=(IMG_SCALES[getImgSlug(currentProduct.name)]??[1,1,1])[imgIndex]??1;
+          document.getElementById('ppageImgWrap').style.setProperty('--ppage-img-scale',s);
+          gsap.fromTo(imgWrap,{x:direction>0?80:-80,opacity:0,scale:0.88},{x:0,opacity:1,scale:1,duration:0.45,ease:'power3.out'});
+        }
+      });
+      renderDots(); updateArrow();
+    }
+
+    /* Si ya está cargada → animar de inmediato, si no → esperar */
+    if(preloader.complete){
+      doTransition();
+    } else {
+      preloader.onload  = doTransition;
+      preloader.onerror = doTransition; /* si falla igual animamos */
+    }
   }
 
   function resetCarousel(cardImgSrc,name){
@@ -652,13 +667,24 @@ const ProductModal = (() => {
        old y new state tienen el mismo filter → sin parpadeo al final */
     card.style.viewTransitionName = 'vt-container';
     const ci = _getCardImg(card);
-    if(ci){ ci._savedFilter = ci.style.filter; ci.style.filter = 'none'; ci.style.viewTransitionName = 'vt-image'; }
+    if(ci){
+      ci._savedFilter     = ci.style.filter;
+      ci._savedTransition = ci.style.transition;
+      ci.style.transition = 'none';   /* deshabilitar transition para cambio instantáneo */
+      ci.style.filter     = 'none';   /* quitar shadow antes del snapshot */
+      ci.offsetHeight;                /* forzar reflow para que el browser lo aplique YA */
+      ci.style.viewTransitionName = 'vt-image';
+    }
 
     const t = document.startViewTransition(() => showModal(card));
     t.finished.then(() => {
       clearVTNames(card);
       /* Restaurar shadow */
-      if(ci && ci._savedFilter !== undefined){ ci.style.filter = ci._savedFilter; delete ci._savedFilter; }
+      if(ci && ci._savedFilter !== undefined){
+        ci.style.transition = ci._savedTransition || '';
+        ci.style.filter     = ci._savedFilter;
+        delete ci._savedFilter; delete ci._savedTransition;
+      }
     });
   }
 
