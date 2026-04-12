@@ -38,6 +38,12 @@ const FEATURES = {
   'cargador-samsung-45w':       ['Carga ultra rápida 45W','Compatible línea Galaxy','Cable USB-C incluido','Carga completa en ~1 hora'],
 };
 
+/* Mapeo de nombres del carrusel → key real en PRICE_TIERS/FEATURES/PRODUCT_IMAGES
+   cuando el slide usa un nombre distinto al de la card de la grilla             */
+const SLIDE_KEY_MAP = {
+  'airpods-max': 'max-magnéticos',
+};
+
 /* ══ ESTADO ══ */
 const state = { current:0, isTransitioning:false, cart:[] };
 
@@ -349,7 +355,7 @@ const MaskReveal = (() => {
    ══════════════════════════════════════════════ */
 const ProductModal = (() => {
   let isOpen=false, originCard=null, originRect=null, qty=1, tiers=[], currentProduct=null;
-  let tiersOpen=false, imgIndex=0, imgList=[];
+  let tiersOpen=false, imgIndex=0, imgList=[], isTemp=false;
 
   const ppage   = document.getElementById('ppage');
   const overlay = document.getElementById('ppageOverlay');
@@ -381,10 +387,12 @@ const ProductModal = (() => {
   }
 
   const TWO_IMG=['bateria-magsafe','cargador-lightning-completo','cargador-tipo-c-completo','cargador-samsung-45w'];
-  function buildImgList(cardImg,name){
-    const slug=getImgSlug(name);
-    const v1=PRODUCT_IMAGES[slug]||cardImg;
-    return TWO_IMG.includes(slug)?[v1,`images/${slug}-v2.png`]:[v1,`images/${slug}-v2.png`,`images/${slug}-v3.png`];
+  function buildImgList(cardImg, nameOrKey){
+    const slug = getImgSlug(nameOrKey);
+    const v1 = PRODUCT_IMAGES[slug] || cardImg;
+    return TWO_IMG.includes(slug)
+      ? [v1, `images/${slug}-v2.png`]
+      : [v1, `images/${slug}-v2.png`, `images/${slug}-v3.png`];
   }
 
   function renderDots(){
@@ -399,7 +407,62 @@ const ProductModal = (() => {
   function updateArrow(){
     const btn=document.getElementById('ppageImgNext');
     if(!btn) return;
-    btn.classList.toggle('hidden',imgIndex>=imgList.length-1);
+    btn.classList.toggle('hidden', isTemp || imgIndex>=imgList.length-1);
+  }
+
+  /* ── Modo TEMP: mostrar todas las miniaturas reales antes de que el usuario elija ── */
+  function renderTempThumbs(){
+    const wrap=document.getElementById('ppageThumbs');
+    if(!wrap) return;
+    wrap.innerHTML='';
+    imgList.forEach((src,i)=>{
+      const thumb=document.createElement('div');
+      thumb.className='ppage-thumb';
+      thumb.dataset.index=i;
+      thumb.innerHTML=`<img src="${src}" alt="">`;
+      gsap.set(thumb,{opacity:0,y:20,scale:0.8});
+      wrap.appendChild(thumb);
+      gsap.to(thumb,{opacity:1,y:0,scale:1,duration:0.35,delay:i*0.06,ease:'back.out(1.5)'});
+      thumb.addEventListener('click',()=>activateFromTemp(i));
+    });
+  }
+
+  /* ── Al hacer click en miniatura: imagen temp → imagen real ── */
+  function activateFromTemp(newIndex){
+    isTemp=false;
+    const imgEl=document.getElementById('ppageImg');
+    const imgWrap=document.getElementById('ppageImgWrap');
+    const wrap=document.getElementById('ppageThumbs');
+
+    /* Limpiar miniaturas y re-agregar solo las que van antes del índice elegido */
+    wrap.innerHTML='';
+    for(let i=0;i<newIndex;i++) addThumb(imgList[i],i);
+
+    imgIndex=newIndex;
+
+    const IMG_SCALES={
+      'apple-watch-ultra-3':      [1,1,1],
+      'apple-watch-serie-10':     [1,1,0.75],
+      'apple-watch-black-ultra-2':[1,0.75,0.75],
+      'airpods-4ta-generacion':   [1,1,1.3],
+      'airpods-pro-2':            [1,1,1],
+      'airpods-3ra-generacion':   [1,1,1],
+      'bateria-magsafe':          [1,1,1],
+      'max-magneticos':           [1,1,1],
+      'cargador-lightning-completo':[1,1.4,1],
+      'cargador-tipo-c-completo': [1,1,1],
+      'cargador-samsung-45w':     [1,1,1],
+    };
+
+    gsap.to(imgWrap,{opacity:0,scale:0.88,duration:0.25,ease:'power3.in',
+      onComplete:()=>{
+        imgEl.src=imgList[imgIndex];
+        const s=(IMG_SCALES[getImgSlug(currentProduct.name)]??[1,1,1])[imgIndex]??1;
+        document.getElementById('ppageImgWrap').style.setProperty('--ppage-img-scale',s);
+        gsap.fromTo(imgWrap,{opacity:0,scale:0.88},{opacity:1,scale:1,duration:0.4,ease:'power3.out'});
+      }
+    });
+    renderDots(); updateArrow();
   }
 
   function addThumb(src,fromIndex){
@@ -418,6 +481,7 @@ const ProductModal = (() => {
 
   function goToImg(newIndex){
     if(newIndex===imgIndex) return;
+    if(isTemp) return; /* en modo temp la flecha no hace nada */
     const imgEl=document.getElementById('ppageImg');
     const imgWrap=document.getElementById('ppageImgWrap');
     const direction=newIndex>imgIndex?1:-1;
@@ -472,8 +536,8 @@ const ProductModal = (() => {
     }
   }
 
-  function resetCarousel(cardImgSrc,name){
-    imgIndex=0; imgList=buildImgList(cardImgSrc,name);
+  function resetCarousel(cardImgSrc, name, mappedKey){
+    imgIndex=0; imgList=buildImgList(cardImgSrc, mappedKey || name);
     const wrap=document.getElementById('ppageThumbs');
     if(wrap) wrap.innerHTML='';
     const imgWrap=document.getElementById('ppageImgWrap');
@@ -594,7 +658,8 @@ const ProductModal = (() => {
     }
     ppage.classList.remove('active'); overlay.classList.remove('active');
     overlay.style.opacity='0';
-    /* Resetear opacidades para la próxima apertura */
+    /* Resetear opacidades y estado temp para la próxima apertura */
+    isTemp = false;
     const ppageInfo = document.getElementById('ppageInfo');
     if(ppageInfo) ppageInfo.style.opacity = '';
     const pb = document.getElementById('ppageBack');
@@ -614,7 +679,8 @@ const ProductModal = (() => {
     isOpen=true; originCard=card; qty=1; tiersOpen=false;
 
     const id  = 'cat-'+card.dataset.name.replace(/\s+/g,'-').toLowerCase();
-    const key = id.replace('cat-','');
+    const rawKey = id.replace('cat-','');
+    const key = SLIDE_KEY_MAP[rawKey] || rawKey;
     tiers = PRICE_TIERS[key]||[{qty:1,price:Number(card.dataset.price)}];
 
     currentProduct = {
@@ -637,13 +703,34 @@ const ProductModal = (() => {
       if(b) b.style.height='0'; if(c) c.classList.remove('open');
     });
     renderTiers(); updateTotal(); renderFeatures(key);
-    resetCarousel(currentProduct.image, card.dataset.name);
-    const list=document.getElementById('ppageTiersList');
-    if(list) list.style.height='0';
+    resetCarousel(currentProduct.image, card.dataset.name, key);
 
+    /* Modo TEMP: si viene del carrusel, la imagen mostrada es temporal
+       → se muestran todas las miniaturas reales, sin flecha */
+    const isCslSlide = card.classList.contains('csl-slide');
+
+    /* Limpiar estilos residuales ANTES de configurar el modo temp */
     ppage.querySelectorAll('*').forEach(el=>{
       el.style.opacity=''; el.style.transform=''; el.style.transition='';
     });
+
+    if(isCslSlide){
+      isTemp = true;
+      updateArrow(); /* ocultar flecha ANTES de que se vea */
+      renderTempThumbs();
+    } else {
+      /* Si viene de la grid: arrancar en el índice que coincide con la imagen */
+      const cardFileName = currentProduct.image.split('/').pop().split('?')[0];
+      const matchIdx = imgList.findIndex(src => src.split('/').pop() === cardFileName);
+      if(matchIdx > 0){
+        imgIndex = matchIdx;
+        const ppImg = document.getElementById('ppageImg');
+        if(ppImg) ppImg.src = imgList[imgIndex];
+        renderDots(); updateArrow();
+      }
+    }
+    const list=document.getElementById('ppageTiersList');
+    if(list) list.style.height='0';
 
     originRect = card.getBoundingClientRect();
 
@@ -714,13 +801,23 @@ const ProductModal = (() => {
     if(ppageInfo) ppageInfo.style.opacity = '0';
     document.getElementById('ppageBack').style.opacity = '0';
 
+    /* Aplicar border-radius ANTES del snapshot →
+       OLD state ya tiene esquinas redondeadas → sin pico durante la transición */
+    ppage.style.borderRadius = '20px';
+
+    /* Marcar body para que el CSS sepa que es cierre → fade out del old */
+    document.body.classList.add('vt-closing');
+
     /* OLD state: ppage + ppageImg tienen los nombres (visibles antes del callback)
        NEW state: card + cardImg tienen los nombres (seteados dentro de hideModal) */
     ppage.style.viewTransitionName = 'vt-container';
     document.getElementById('ppageImg').style.viewTransitionName = 'vt-image';
 
     const t = document.startViewTransition(() => hideModal(targetCard));
-    t.finished.then(() => clearVTNames(targetCard));
+    t.finished.then(() => {
+      clearVTNames(targetCard);
+      document.body.classList.remove('vt-closing');
+    });
   }
 
   /* ── INIT ── */
@@ -860,16 +957,10 @@ const Carousel3D = (() => {
     });
 
     function openFromSlide(slide){
-      const name=slide.dataset.name;
-      const shopCard=Array.from(document.querySelectorAll('.product-card[data-name]'))
-        .find(c=>c.dataset.name===name);
-      if(shopCard){
-        const saved=shopCard.style.cssText;
-        ProductModal.open(shopCard);
-        shopCard.style.cssText=saved;
-      } else {
-        ProductModal.open(slide);
-      }
+      /* Abrir directamente desde el slide → la animación VT parte del carrusel,
+         no de la card del grid. El slide tiene todos los data-attributes necesarios
+         y la imagen en .csl-img img que _getCardImg ya sabe encontrar. */
+      ProductModal.open(slide);
     }
 
     document.querySelectorAll('.csl-swiper .swiper-slide[data-name]').forEach((slide,i)=>{
