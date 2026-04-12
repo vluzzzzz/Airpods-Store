@@ -659,9 +659,12 @@ const ProductModal = (() => {
   function hideModal(targetCard){
     if(targetCard){
       targetCard.style.visibility='';
-      /* nombre en card e img de la card → capturado como "new" state */
       targetCard.style.viewTransitionName='vt-container';
-      const ci=_getCardImg(targetCard); if(ci) ci.style.viewTransitionName='vt-image';
+      /* vt-image solo en grid — en carousel Swiper transforma el slide
+         continuamente y causa salto si mapeamos la imagen por separado */
+      const isCarousel = targetCard.classList.contains('csl-slide');
+      const ci=_getCardImg(targetCard);
+      if(ci && !isCarousel) ci.style.viewTransitionName='vt-image';
     }
     ppage.classList.remove('active'); overlay.classList.remove('active');
     overlay.style.opacity='0';
@@ -837,27 +840,15 @@ const ProductModal = (() => {
     document.documentElement.classList.add('vt-closing');
 
     /* OLD state: ppage + ppageImg tienen los nombres */
+    const isCarousel = originCard?.classList.contains('csl-slide');
     ppage.style.viewTransitionName = 'vt-container';
-    if(ppageImgEl) ppageImgEl.style.viewTransitionName = 'vt-image';
+    /* vt-image solo para grid — en carousel el Swiper transform causa salto */
+    if(ppageImgEl && !isCarousel) ppageImgEl.style.viewTransitionName = 'vt-image';
 
     const t = document.startViewTransition(() => hideModal(targetCard));
     t.finished
       .then(() => {
         clearVTNames(targetCard);
-        /* Fade-in suave de la sombra → no aparece de golpe
-           Double rAF: asegura que el browser pinte filter:none ANTES de iniciar la transición
-           ci.style.transition = '' → restaura el CSS completo (transform + filter) sin tocarlo */
-        const ci = _getCardImg(targetCard);
-        if(ci){
-          ci.style.transition = 'none';
-          ci.style.filter     = 'none';
-          requestAnimationFrame(()=>{
-            requestAnimationFrame(()=>{
-              ci.style.transition = ''; /* vacío = CSS toma el control (transform + filter) */
-              ci.style.filter     = ''; /* vacío = CSS aplica drop-shadow con su transition */
-            });
-          });
-        }
       })
       .catch(() => { clearVTNames(targetCard); hideModal(targetCard); })
       .finally(() => { document.documentElement.classList.remove('vt-closing'); });
