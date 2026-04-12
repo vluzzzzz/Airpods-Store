@@ -897,6 +897,39 @@ const ProductModal = (() => {
       setTimeout(()=>{btn.innerHTML=`<svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.5c.8 0 1.5-.5 1.7-1.2l3-7H6.2L5.3 3H1v2h3l3.6 7.6-1.3 2.4c-.1.2-.2.5-.2.8 0 1.1.9 2 2 2h12v-2H8.4c-.1 0-.2-.1-.2-.2l.03-.12L9.1 14z"/></svg> Agregar al carrito`;},1800);
     });
 
+    /* ── Mercado Pago desde el modal ── */
+    document.getElementById('ppageMpBtn')?.addEventListener('click', async ()=>{
+      if(!currentProduct) return;
+      const btn = document.getElementById('ppageMpBtn');
+      const unit = priceForQty(qty);
+      const total = unit * qty;
+      btn.textContent = 'Procesando...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/create-preference', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: [{ name: currentProduct.name, qty, price: unit }]
+          }),
+        });
+        const data = await res.json();
+        if(data.init_point) {
+          window.location.href = data.init_point;
+        } else {
+          throw new Error('Sin init_point');
+        }
+      } catch(err) {
+        console.error('MP modal error:', err);
+        btn.textContent = 'Error, intenta de nuevo';
+        btn.disabled = false;
+        setTimeout(()=>{
+          btn.innerHTML = `<svg style="width:18px;height:18px;fill:currentColor;vertical-align:middle;margin-right:8px" viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>Pagar con Mercado Pago`;
+          btn.disabled = false;
+        }, 2500);
+      }
+    });
+
     ['ppage-features','ppage-delivery'].forEach(id=>{
       const header=document.getElementById(id+'-header');
       if(header) header.addEventListener('click',()=>openAccordion(id));
