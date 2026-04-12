@@ -355,7 +355,7 @@ const MaskReveal = (() => {
    ══════════════════════════════════════════════ */
 const ProductModal = (() => {
   let isOpen=false, originCard=null, originRect=null, qty=1, tiers=[], currentProduct=null;
-  let tiersOpen=false, imgIndex=0, imgList=[], isTemp=false;
+  let tiersOpen=false, imgIndex=0, imgList=[], isTemp=false, openingImage='';
 
   const ppage   = document.getElementById('ppage');
   const overlay = document.getElementById('ppageOverlay');
@@ -668,6 +668,7 @@ const ProductModal = (() => {
     /* Resetear opacidades y estado temp para la próxima apertura */
     isTemp = false;
     isAnimatingImg = false;
+    openingImage = '';
     const ppageInfo = document.getElementById('ppageInfo');
     if(ppageInfo) ppageInfo.style.opacity = '';
     const pb = document.getElementById('ppageBack');
@@ -697,6 +698,9 @@ const ProductModal = (() => {
       rawPrice: tiers[0]?.price ?? Number(card.dataset.price),
       image:    (card.querySelector('.card-img-wrap img')||card.querySelector('.dc-img img')||card.querySelector('.csl-img img'))?.src||'',
     };
+
+    /* Guardar la imagen que se usa para abrir → siempre cerrar con esta */
+    openingImage = currentProduct.image;
 
     /* Poblar modal ANTES de la transición */
     document.getElementById('ppageImg').src            = currentProduct.image;
@@ -815,27 +819,46 @@ const ProductModal = (() => {
       return;
     }
 
+    /* Restaurar la imagen con la que se abrió → VT cierra con esa imagen
+       sin importar en qué imagen esté el usuario ahora */
+    const ppageImgEl = document.getElementById('ppageImg');
+    if(ppageImgEl && openingImage) ppageImgEl.src = openingImage;
+
     /* Ocultar texto del modal ANTES del snapshot → solo imagen y contenedor animan */
     const ppageInfo = document.getElementById('ppageInfo');
     if(ppageInfo) ppageInfo.style.opacity = '0';
     const ppageBack = document.getElementById('ppageBack');
     if(ppageBack) ppageBack.style.opacity = '0';
 
-    /* Aplicar border-radius ANTES del snapshot →
-       OLD state ya tiene esquinas redondeadas → sin pico durante la transición */
+    /* Aplicar border-radius ANTES del snapshot → sin pico durante la transición */
     ppage.style.borderRadius = '20px';
 
     /* Marcar documentElement (no body) para que el CSS :root.vt-closing funcione */
     document.documentElement.classList.add('vt-closing');
 
-    /* OLD state: ppage + ppageImg tienen los nombres (visibles antes del callback)
-       NEW state: card + cardImg tienen los nombres (seteados dentro de hideModal) */
+    /* OLD state: ppage + ppageImg tienen los nombres */
     ppage.style.viewTransitionName = 'vt-container';
-    document.getElementById('ppageImg').style.viewTransitionName = 'vt-image';
+    if(ppageImgEl) ppageImgEl.style.viewTransitionName = 'vt-image';
 
     const t = document.startViewTransition(() => hideModal(targetCard));
     t.finished
-      .then(() => { clearVTNames(targetCard); })
+      .then(() => {
+        clearVTNames(targetCard);
+        /* Fade-in suave de la sombra → no aparece de golpe
+           Double rAF: asegura que el browser pinte filter:none ANTES de iniciar la transición
+           ci.style.transition = '' → restaura el CSS completo (transform + filter) sin tocarlo */
+        const ci = _getCardImg(targetCard);
+        if(ci){
+          ci.style.transition = 'none';
+          ci.style.filter     = 'none';
+          requestAnimationFrame(()=>{
+            requestAnimationFrame(()=>{
+              ci.style.transition = ''; /* vacío = CSS toma el control (transform + filter) */
+              ci.style.filter     = ''; /* vacío = CSS aplica drop-shadow con su transition */
+            });
+          });
+        }
+      })
       .catch(() => { clearVTNames(targetCard); hideModal(targetCard); })
       .finally(() => { document.documentElement.classList.remove('vt-closing'); });
   }
