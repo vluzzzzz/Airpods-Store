@@ -38,14 +38,71 @@ const FEATURES = {
   'cargador-samsung-45w':       ['Carga ultra rápida 45W','Compatible línea Galaxy','Cable USB-C incluido','Carga completa en ~1 hora'],
 };
 
-/* Mapeo de nombres del carrusel → key real en PRICE_TIERS/FEATURES/PRODUCT_IMAGES
-   cuando el slide usa un nombre distinto al de la card de la grilla             */
 const SLIDE_KEY_MAP = {
   'airpods-max': 'max-magnéticos',
 };
 
 /* ══ ESTADO ══ */
 const state = { current:0, isTransitioning:false, cart:[] };
+
+/* ══════════════════════════════════════════════
+   MÓDULO: PRECARGA DE IMÁGENES
+   Precarga todas las imágenes del catálogo apenas
+   carga la página → sin freezes en Vercel
+   ══════════════════════════════════════════════ */
+const ImagePreloader = (() => {
+  /* Todas las imágenes del sitio — v1, v2 y v3 de cada producto */
+  const ALL_IMAGES = [
+    /* Hero */
+    'images/airpods.png','images/airpods4.png','images/airpodsmax.png',
+    /* Carrusel destacados */
+    'images/airpodsmax.png','images/airpods2unidad.png',
+    'images/airpods-4ta-generacion-v2.png','images/serie10desta.png',
+    'images/apple-watch-ultra-3.png',
+    /* Grid productos — v1 */
+    'images/apple-watch-ultra-3.png','images/serie-10.png',
+    'images/black-ultra-2.png','images/airpods-4gen.png',
+    'images/airpods-pro-2.png','images/airpods-3gen.png',
+    'images/bateria-magsafe.png','images/max-magneticos.png',
+    'images/cargador-lightning.png','images/cargador-tipo-c.png',
+    'images/cargador-samsung-45w.png',
+    /* Modal — v2 */
+    'images/apple-watch-ultra-3-v2.png','images/serie-10-v2.png',
+    'images/black-ultra-2-v2.png','images/airpods-4gen-v2.png',
+    'images/airpods-pro-2-v2.png','images/airpods-3gen-v2.png',
+    'images/bateria-magsafe-v2.png','images/max-magneticos-v2.png',
+    'images/cargador-lightning-completo-v2.png',
+    'images/cargador-tipo-c-completo-v2.png',
+    'images/cargador-samsung-45w-v2.png',
+    /* Modal — v3 */
+    'images/apple-watch-ultra-3-v3.png','images/serie-10-v3.png',
+    'images/black-ultra-2-v3.png','images/airpods-4gen-v3.png',
+    'images/airpods-pro-2-v3.png','images/airpods-3gen-v3.png',
+    'images/max-magneticos-v3.png',
+  ];
+
+  function init(){
+    /* Prioridad alta: imágenes visibles al cargar (hero + carrusel) */
+    const priority = [
+      'images/airpods.png','images/airpods4.png','images/airpodsmax.png',
+      'images/airpods2unidad.png','images/airpods-4ta-generacion-v2.png',
+      'images/serie10desta.png','images/apple-watch-ultra-3.png',
+    ];
+    /* Cargar las prioritarias inmediatamente */
+    priority.forEach(src => { const img = new Image(); img.src = src; });
+
+    /* El resto con requestIdleCallback para no bloquear el render */
+    const rest = ALL_IMAGES.filter(s => !priority.includes(s));
+    const load = () => rest.forEach(src => { const img = new Image(); img.src = src; });
+    if('requestIdleCallback' in window){
+      requestIdleCallback(load, { timeout: 3000 });
+    } else {
+      setTimeout(load, 1500);
+    }
+  }
+
+  return { init };
+})();
 
 /* ══ DOM ══ */
 const DOM = {
@@ -410,7 +467,6 @@ const ProductModal = (() => {
     btn.classList.toggle('hidden', isTemp || imgIndex>=imgList.length-1);
   }
 
-  /* ── Modo TEMP: mostrar todas las miniaturas reales antes de que el usuario elija ── */
   function renderTempThumbs(){
     const wrap=document.getElementById('ppageThumbs');
     if(!wrap) return;
@@ -427,17 +483,14 @@ const ProductModal = (() => {
     });
   }
 
-  /* ── Al hacer click en miniatura: imagen temp → imagen real ── */
   function activateFromTemp(newIndex){
     isTemp=false;
     const imgEl=document.getElementById('ppageImg');
     const imgWrap=document.getElementById('ppageImgWrap');
     const wrap=document.getElementById('ppageThumbs');
 
-    /* Limpiar miniaturas y re-agregar solo las que van antes del índice elegido */
     wrap.innerHTML='';
     for(let i=0;i<newIndex;i++) addThumb(imgList[i],i);
-
     imgIndex=newIndex;
 
     const IMG_SCALES={
@@ -457,8 +510,9 @@ const ProductModal = (() => {
     gsap.to(imgWrap,{opacity:0,scale:0.88,duration:0.25,ease:'power3.in',
       onComplete:()=>{
         imgEl.src=imgList[imgIndex];
-        const s=(IMG_SCALES[getImgSlug(currentProduct.name)]??[1,1,1])[imgIndex]??1;
-        document.getElementById('ppageImgWrap').style.setProperty('--ppage-img-scale',s);
+        const s=(IMG_SCALES[getImgSlug(currentProduct?.name||'')]??[1,1,1])[imgIndex]??1;
+        const iw=document.getElementById('ppageImgWrap');
+        if(iw) iw.style.setProperty('--ppage-img-scale',s);
         gsap.fromTo(imgWrap,{opacity:0,scale:0.88},{opacity:1,scale:1,duration:0.4,ease:'power3.out'});
       }
     });
@@ -491,7 +545,6 @@ const ProductModal = (() => {
     const direction=newIndex>imgIndex?1:-1;
     const prevSrc=imgEl.src, prevIndex=imgIndex;
 
-    /* Precargar la imagen ANTES de animar → sin freeze en producción */
     const preloader = new Image();
     preloader.src = imgList[newIndex];
 
@@ -534,12 +587,11 @@ const ProductModal = (() => {
       renderDots(); updateArrow();
     }
 
-    /* Si ya está cargada → animar de inmediato, si no → esperar */
-    if(preloader.complete){
+    if(preloader.complete && preloader.naturalWidth > 0){
       doTransition();
     } else {
       preloader.onload  = doTransition;
-      preloader.onerror = doTransition; /* si falla igual animamos */
+      preloader.onerror = doTransition;
     }
   }
 
@@ -560,6 +612,7 @@ const ProductModal = (() => {
 
   function renderTiers(){
     const table=document.getElementById('ppagePricesTable');
+    if(!table) return;
     const base=tiers[0]?.price??1;
     const sel=document.getElementById('ppageTierSelectedText');
     const selPrice=document.getElementById('ppageTierSelectedPrice');
@@ -587,6 +640,7 @@ const ProductModal = (() => {
     tiersOpen=true;
     const list=document.getElementById('ppageTiersList');
     const chev=document.getElementById('ppageTierChevron');
+    if(!list||!chev) return;
     list.style.height=list.scrollHeight+'px';
     list.classList.add('open'); chev.classList.add('open');
   }
@@ -595,6 +649,7 @@ const ProductModal = (() => {
     tiersOpen=false;
     const list=document.getElementById('ppageTiersList');
     const chev=document.getElementById('ppageTierChevron');
+    if(!list||!chev) return;
     list.style.height='0';
     list.classList.remove('open'); chev.classList.remove('open');
   }
@@ -611,7 +666,8 @@ const ProductModal = (() => {
   }
 
   function updateTotal(){
-    document.getElementById('ppageTotal').textContent=fmt(priceForQty(qty)*qty);
+    const el=document.getElementById('ppageTotal');
+    if(el) el.textContent=fmt(priceForQty(qty)*qty);
     renderTiers();
   }
 
@@ -621,71 +677,56 @@ const ProductModal = (() => {
     if(inner) inner.innerHTML='<ul>'+feats.map(f=>`<li>${f}</li>`).join('')+'</ul>';
   }
 
-  /* ── helper imagen de card ── */
   function _getCardImg(card){
     return card?.querySelector('.card-img-wrap img')||card?.querySelector('.csl-img img')||null;
   }
 
-  /* ── limpiar todos los VT names ── */
   function clearVTNames(card){
     if(card) card.style.viewTransitionName = '';
     const ci=_getCardImg(card); if(ci) ci.style.viewTransitionName='';
     ppage.style.viewTransitionName='';
-    document.getElementById('ppageImg').style.viewTransitionName='';
+    const pi=document.getElementById('ppageImg');
+    if(pi) pi.style.viewTransitionName='';
   }
 
-  /* ── showModal: se ejecuta DENTRO del callback → estado "NEW"
-     CRÍTICO: limpiar VT names de la card después de ocultarla,
-     de lo contrario card (visibility:hidden) y ppage tienen el mismo
-     nombre en el new state → colisión → browser cancela la transición ── */
   function showModal(card){
     ppage.style.display='flex'; ppage.style.position='fixed';
     ppage.style.left='0'; ppage.style.top='0';
     ppage.style.width='100vw'; ppage.style.height='100vh';
     ppage.style.borderRadius='0'; ppage.style.overflow='hidden';
-    /* NEW state: solo ppage tiene los nombres */
     ppage.style.viewTransitionName='vt-container';
-    document.getElementById('ppageImg').style.viewTransitionName='vt-image';
+    const pi=document.getElementById('ppageImg');
+    if(pi) pi.style.viewTransitionName='vt-image';
     ppage.classList.add('active');
     overlay.classList.add('active'); overlay.style.opacity='1';
-    /* Ocultar card Y limpiar sus nombres → no hay colisión */
     card.style.visibility='hidden';
     card.style.viewTransitionName='';
     const ci=_getCardImg(card); if(ci) ci.style.viewTransitionName='';
   }
 
-  /* ── hideModal: se ejecuta DENTRO del callback → estado "NEW"
-     Restaura la card con sus nombres para que sea el "new" state ── */
   function hideModal(targetCard){
     if(targetCard){
       targetCard.style.visibility='';
       targetCard.style.viewTransitionName='vt-container';
-      /* vt-image solo en grid — en carousel Swiper transforma el slide
-         continuamente y causa salto si mapeamos la imagen por separado */
       const isCarousel = targetCard.classList.contains('csl-slide');
       const ci=_getCardImg(targetCard);
       if(ci && !isCarousel) ci.style.viewTransitionName='vt-image';
     }
     ppage.classList.remove('active'); overlay.classList.remove('active');
     overlay.style.opacity='0';
-    /* Resetear opacidades y estado temp para la próxima apertura */
-    isTemp = false;
-    isAnimatingImg = false;
-    openingImage = '';
-    const ppageInfo = document.getElementById('ppageInfo');
-    if(ppageInfo) ppageInfo.style.opacity = '';
-    const pb = document.getElementById('ppageBack');
-    if(pb) pb.style.opacity = '';
-    /* ocultar ppage con propiedades individuales */
+    isTemp=false; isAnimatingImg=false; openingImage='';
+    const ppageInfo=document.getElementById('ppageInfo');
+    if(ppageInfo) ppageInfo.style.opacity='';
+    const pb=document.getElementById('ppageBack');
+    if(pb) pb.style.opacity='';
     ppage.style.display='none'; ppage.style.viewTransitionName='';
-    document.getElementById('ppageImg').style.viewTransitionName='';
+    const pi=document.getElementById('ppageImg');
+    if(pi) pi.style.viewTransitionName='';
     if(targetCard) targetCard.classList.remove('animating');
     isOpen=false; currentProduct=null; originCard=null;
   }
 
-  /* ─────────────────────────────────────────────
-     OPEN — card morphs into modal
-  ───────────────────────────────────────────── */
+  /* ── OPEN ── */
   function open(card){
     if(isOpen) return;
     isOpen=true; originCard=card; qty=1; tiersOpen=false;
@@ -702,45 +743,41 @@ const ProductModal = (() => {
       image:    (card.querySelector('.card-img-wrap img')||card.querySelector('.dc-img img')||card.querySelector('.csl-img img'))?.src||'',
     };
 
-    /* Guardar la imagen que se usa para abrir → siempre cerrar con esta */
     openingImage = currentProduct.image;
 
-    /* Poblar modal ANTES de la transición */
-    document.getElementById('ppageImg').src            = currentProduct.image;
-    document.getElementById('ppageImg').alt            = currentProduct.name;
-    document.getElementById('ppageName').textContent   = currentProduct.name;
-    document.getElementById('ppageDesc').textContent   = card.dataset.desc||'';
-    document.getElementById('ppageQtyNum').textContent = '1';
+    const ppageImgEl = document.getElementById('ppageImg');
+    if(ppageImgEl){ ppageImgEl.src = currentProduct.image; ppageImgEl.alt = currentProduct.name; }
+    const ppageNameEl = document.getElementById('ppageName');
+    if(ppageNameEl) ppageNameEl.textContent = currentProduct.name;
+    const ppageDescEl = document.getElementById('ppageDesc');
+    if(ppageDescEl) ppageDescEl.textContent = card.dataset.desc||'';
+    const ppageQtyEl = document.getElementById('ppageQtyNum');
+    if(ppageQtyEl) ppageQtyEl.textContent = '1';
 
-    ['ppage-features','ppage-delivery'].forEach(id=>{
-      const b=document.getElementById(id+'-body');
-      const c=document.getElementById(id+'-chev');
+    ['ppage-features','ppage-delivery'].forEach(accId=>{
+      const b=document.getElementById(accId+'-body');
+      const c=document.getElementById(accId+'-chev');
       if(b) b.style.height='0'; if(c) c.classList.remove('open');
     });
     renderTiers(); updateTotal(); renderFeatures(key);
     resetCarousel(currentProduct.image, card.dataset.name, key);
 
-    /* Modo TEMP: si viene del carrusel, la imagen mostrada es temporal
-       → se muestran todas las miniaturas reales, sin flecha */
     const isCslSlide = card.classList.contains('csl-slide');
 
-    /* Limpiar estilos residuales ANTES de configurar el modo temp */
     ppage.querySelectorAll('*').forEach(el=>{
       el.style.opacity=''; el.style.transform=''; el.style.transition='';
     });
 
     if(isCslSlide){
       isTemp = true;
-      updateArrow(); /* ocultar flecha ANTES de que se vea */
+      updateArrow();
       renderTempThumbs();
     } else {
-      /* Si viene de la grid: arrancar en el índice que coincide con la imagen */
       const cardFileName = currentProduct.image.split('/').pop().split('?')[0];
       const matchIdx = imgList.findIndex(src => src.split('/').pop() === cardFileName);
       if(matchIdx > 0){
         imgIndex = matchIdx;
-        const ppImg = document.getElementById('ppageImg');
-        if(ppImg) ppImg.src = imgList[imgIndex];
+        if(ppageImgEl) ppageImgEl.src = imgList[imgIndex];
         renderDots(); updateArrow();
       }
     }
@@ -749,7 +786,7 @@ const ProductModal = (() => {
 
     originRect = card.getBoundingClientRect();
 
-    /* ── Fallback (Safari sin soporte / Firefox) ── */
+    /* Fallback sin VT */
     if(!document.startViewTransition){
       const cx=(originRect.left+originRect.width/2)/window.innerWidth*100;
       const cy=(originRect.top+originRect.height/2)/window.innerHeight*100;
@@ -762,54 +799,69 @@ const ProductModal = (() => {
       return;
     }
 
-    /* ── View Transition ──
-       OLD state: card + cardImg tienen los nombres (visibles antes del callback)
-       NEW state: ppage + ppageImg tienen los nombres (seteados dentro de showModal) */
-    /* Quitar shadow de la card img ANTES del snapshot →
-       old y new state tienen el mismo filter → sin parpadeo al final */
     card.style.viewTransitionName = 'vt-container';
     const ci = _getCardImg(card);
     if(ci){
       ci._savedFilter     = ci.style.filter;
       ci._savedTransition = ci.style.transition;
-      ci.style.transition = 'none';   /* deshabilitar transition para cambio instantáneo */
-      ci.style.filter     = 'none';   /* quitar shadow antes del snapshot */
-      ci.offsetHeight;                /* forzar reflow para que el browser lo aplique YA */
+      ci.style.transition = 'none';
+      ci.style.filter     = 'none';
+      ci.offsetHeight;
       ci.style.viewTransitionName = 'vt-image';
     }
 
     const t = document.startViewTransition(() => showModal(card));
+    const restoreCI = () => {
+      if(ci && ci._savedFilter !== undefined){
+        ci.style.transition = ci._savedTransition || '';
+        ci.style.filter     = ci._savedFilter;
+        delete ci._savedFilter; delete ci._savedTransition;
+      }
+    };
     t.finished
-      .then(() => {
-        clearVTNames(card);
-        if(ci && ci._savedFilter !== undefined){
-          ci.style.transition = ci._savedTransition || '';
-          ci.style.filter     = ci._savedFilter;
-          delete ci._savedFilter; delete ci._savedTransition;
-        }
-      })
+      .then(() => { clearVTNames(card); restoreCI(); })
       .catch(() => {
-        /* VT cancelada: limpiar y restaurar estado */
-        clearVTNames(card);
-        if(ci && ci._savedFilter !== undefined){
-          ci.style.transition = ci._savedTransition || '';
-          ci.style.filter     = ci._savedFilter;
-          delete ci._savedFilter; delete ci._savedTransition;
-        }
+        clearVTNames(card); restoreCI();
         card.style.visibility = '';
-        isOpen = false; currentProduct = null; originCard = null;
+        isOpen=false; currentProduct=null; originCard=null;
       });
   }
 
-  /* ─────────────────────────────────────────────
-     CLOSE — modal morphs back into card
-  ───────────────────────────────────────────── */
+  /* ── CLOSE ── */
   function close(){
     if(!isOpen||!originRect) return;
 
     const targetCard = originCard;
+    const isCarousel = originCard?.classList.contains('csl-slide');
 
-    /* ── Fallback ── */
+    /* ── CIERRE CAROUSEL: GSAP scale-down hacia la card ── */
+    if(isCarousel){
+      const ppageInfo2=document.getElementById('ppageInfo');
+      if(ppageInfo2) ppageInfo2.style.opacity='0';
+      const ppageBack2=document.getElementById('ppageBack');
+      if(ppageBack2) ppageBack2.style.opacity='0';
+
+      let rect=originRect;
+      if(targetCard){ const f=targetCard.getBoundingClientRect(); if(f.width>0) rect=f; }
+      const cx=((rect.left+rect.width/2)/window.innerWidth*100).toFixed(2);
+      const cy=((rect.top+rect.height/2)/window.innerHeight*100).toFixed(2);
+
+      ppage.style.borderRadius='20px';
+      ppage.style.transformOrigin=`${cx}% ${cy}%`;
+
+      gsap.to(overlay,{opacity:0,duration:0.35,ease:'power2.in'});
+      gsap.to(ppage,{
+        scale:0,duration:0.52,ease:'expo.in',
+        onComplete(){
+          hideModal(targetCard);
+          ppage.style.transform='';
+          ppage.style.transformOrigin='';
+        }
+      });
+      return;
+    }
+
+    /* ── CIERRE GRID: fallback sin VT ── */
     if(!document.startViewTransition){
       let rect=originRect;
       if(targetCard){ const f=targetCard.getBoundingClientRect(); if(f.width>0) rect=f; }
@@ -822,36 +874,26 @@ const ProductModal = (() => {
       return;
     }
 
-    /* Restaurar la imagen con la que se abrió → VT cierra con esa imagen
-       sin importar en qué imagen esté el usuario ahora */
-    const ppageImgEl = document.getElementById('ppageImg');
-    if(ppageImgEl && openingImage) ppageImgEl.src = openingImage;
+    /* ── CIERRE GRID: View Transition ── */
+    const ppageImgEl=document.getElementById('ppageImg');
+    if(ppageImgEl && openingImage) ppageImgEl.src=openingImage;
 
-    /* Ocultar texto del modal ANTES del snapshot → solo imagen y contenedor animan */
-    const ppageInfo = document.getElementById('ppageInfo');
-    if(ppageInfo) ppageInfo.style.opacity = '0';
-    const ppageBack = document.getElementById('ppageBack');
-    if(ppageBack) ppageBack.style.opacity = '0';
+    const ppageInfo=document.getElementById('ppageInfo');
+    if(ppageInfo) ppageInfo.style.opacity='0';
+    const ppageBack=document.getElementById('ppageBack');
+    if(ppageBack) ppageBack.style.opacity='0';
 
-    /* Aplicar border-radius ANTES del snapshot → sin pico durante la transición */
-    ppage.style.borderRadius = '20px';
-
-    /* Marcar documentElement (no body) para que el CSS :root.vt-closing funcione */
+    ppage.style.borderRadius='20px';
     document.documentElement.classList.add('vt-closing');
 
-    /* OLD state: ppage + ppageImg tienen los nombres */
-    const isCarousel = originCard?.classList.contains('csl-slide');
-    ppage.style.viewTransitionName = 'vt-container';
-    /* vt-image solo para grid — en carousel el Swiper transform causa salto */
-    if(ppageImgEl && !isCarousel) ppageImgEl.style.viewTransitionName = 'vt-image';
+    ppage.style.viewTransitionName='vt-container';
+    if(ppageImgEl) ppageImgEl.style.viewTransitionName='vt-image';
 
-    const t = document.startViewTransition(() => hideModal(targetCard));
+    const t=document.startViewTransition(()=>hideModal(targetCard));
     t.finished
-      .then(() => {
-        clearVTNames(targetCard);
-      })
-      .catch(() => { clearVTNames(targetCard); hideModal(targetCard); })
-      .finally(() => { document.documentElement.classList.remove('vt-closing'); });
+      .then(()=>{ clearVTNames(targetCard); })
+      .catch(()=>{ clearVTNames(targetCard); hideModal(targetCard); })
+      .finally(()=>{ document.documentElement.classList.remove('vt-closing'); });
   }
 
   /* ── INIT ── */
@@ -869,11 +911,11 @@ const ProductModal = (() => {
     const nextViewBtn=document.getElementById('ppageImgNext');
     if(nextViewBtn) nextViewBtn.addEventListener('click',()=>goToImg(imgIndex+1));
 
-    document.getElementById('ppageQtyMinus').addEventListener('click',()=>{
-      if(qty>1){qty--;document.getElementById('ppageQtyNum').textContent=qty;updateTotal();}
+    document.getElementById('ppageQtyMinus')?.addEventListener('click',()=>{
+      if(qty>1){qty--;const el=document.getElementById('ppageQtyNum');if(el)el.textContent=qty;updateTotal();}
     });
-    document.getElementById('ppageQtyPlus').addEventListener('click',()=>{
-      qty++;document.getElementById('ppageQtyNum').textContent=qty;updateTotal();
+    document.getElementById('ppageQtyPlus')?.addEventListener('click',()=>{
+      qty++;const el=document.getElementById('ppageQtyNum');if(el)el.textContent=qty;updateTotal();
     });
 
     document.getElementById('ppageWaBtn')?.addEventListener('click',()=>{
@@ -889,12 +931,13 @@ const ProductModal = (() => {
       window.open(`https://wa.me/56942348587?text=${encodeURIComponent(msg)}`,'_blank');
     });
 
-    document.getElementById('ppageCartBtn').addEventListener('click',()=>{
+    document.getElementById('ppageCartBtn')?.addEventListener('click',()=>{
       if(!currentProduct) return;
       const unit=priceForQty(qty);
       const prod={...currentProduct,rawPrice:unit,price:fmt(unit)};
       for(let i=0;i<qty;i++) Cart.addItem(prod);
       const btn=document.getElementById('ppageCartBtn');
+      if(!btn) return;
       btn.innerHTML='✓ Agregado';
       setTimeout(()=>{btn.innerHTML=`<svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zM7.2 14h9.5c.8 0 1.5-.5 1.7-1.2l3-7H6.2L5.3 3H1v2h3l3.6 7.6-1.3 2.4c-.1.2-.2.5-.2.8 0 1.1.9 2 2 2h12v-2H8.4c-.1 0-.2-.1-.2-.2l.03-.12L9.1 14z"/></svg> Agregar al carrito`;},1800);
     });
@@ -909,7 +952,7 @@ const ProductModal = (() => {
     });
 
     document.getElementById('storeBannerBtn')?.addEventListener('click',()=>{
-      document.getElementById('productos').scrollIntoView({behavior:'smooth'});
+      document.getElementById('productos')?.scrollIntoView({behavior:'smooth'});
     });
   }
 
@@ -922,6 +965,7 @@ const ProductModal = (() => {
 const NavScroll = (() => {
   function init(){
     const nav=document.querySelector('.nav');
+    if(!nav) return;
     window.addEventListener('scroll',()=>nav.classList.toggle('scrolled',window.scrollY>40),{passive:true});
   }
   return {init};
@@ -956,7 +1000,7 @@ const ProductsSection = (() => {
 })();
 
 /* ══════════════════════════════════════════════
-   MÓDULO: SWIPER CARRUSEL — Productos Destacados
+   MÓDULO: SWIPER CARRUSEL
    ══════════════════════════════════════════════ */
 const Carousel3D = (() => {
   function init(){
@@ -971,50 +1015,45 @@ const Carousel3D = (() => {
       pagination:{el:'.csl-pagination',clickable:true},
     });
 
-    const slides = document.querySelectorAll('.csl-swiper .swiper-slide');
-    gsap.set(slides, { opacity:0, y:50 });
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
+    const slides=document.querySelectorAll('.csl-swiper .swiper-slide');
+    gsap.set(slides,{opacity:0,y:50});
+    const obs=new IntersectionObserver(entries=>{
+      entries.forEach(entry=>{
         if(entry.isIntersecting){
-          gsap.to([...slides], { opacity:1, y:0, duration:0.7, ease:'power3.out', stagger:0.08 });
+          gsap.to([...slides],{opacity:1,y:0,duration:0.7,ease:'power3.out',stagger:0.08});
           obs.disconnect();
         }
       });
-    }, { threshold:0.2 });
-    obs.observe(document.querySelector('.csl-swiper'));
+    },{threshold:0.2});
+    const sw=document.querySelector('.csl-swiper');
+    if(sw) obs.observe(sw);
 
     let wasDragged=false,pendingOpen=null;
     swiper.on('sliderMove',()=>{wasDragged=true;});
     swiper.on('touchStart',()=>{wasDragged=false;});
     swiper.on('slideChangeTransitionEnd',()=>{
-      if(pendingOpen!==null){const s=pendingOpen;pendingOpen=null;openFromSlide(s);}
+      if(pendingOpen!==null){const s=pendingOpen;pendingOpen=null;ProductModal.open(s);}
     });
-
-    function openFromSlide(slide){
-      /* Abrir directamente desde el slide → la animación VT parte del carrusel,
-         no de la card del grid. El slide tiene todos los data-attributes necesarios
-         y la imagen en .csl-img img que _getCardImg ya sabe encontrar. */
-      ProductModal.open(slide);
-    }
 
     document.querySelectorAll('.csl-swiper .swiper-slide[data-name]').forEach((slide,i)=>{
       slide.addEventListener('click',()=>{
         if(wasDragged) return;
         if(!slide.classList.contains('swiper-slide-active')){pendingOpen=slide;swiper.slideTo(i);return;}
-        openFromSlide(slide);
+        ProductModal.open(slide);
       });
     });
   }
   return {init};
 })();
 
-/* ══ FLIP CARDS — POR QUÉ ELEGIRNOS ══ */
-document.querySelectorAll('.porque-card').forEach(card => {
-  card.addEventListener('click', () => card.classList.toggle('flipped'));
+/* ══ FLIP CARDS ══ */
+document.querySelectorAll('.porque-card').forEach(card=>{
+  card.addEventListener('click',()=>card.classList.toggle('flipped'));
 });
 
 /* ══ INIT ══ */
 document.addEventListener('DOMContentLoaded',()=>{
+  ImagePreloader.init();
   ProductNav.init();
   Cart.init();
   CartButton.init();
@@ -1029,10 +1068,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(revealRect&&svgText&&typeof ScrollTrigger!=='undefined'){
     gsap.fromTo(revealRect,
       {attr:{width:0}},
-      {
-        attr:{width:520},ease:'none',
-        scrollTrigger:{trigger:'.csl-title-wrap',start:'top 65%',end:'top -10%',scrub:2}
-      }
+      {attr:{width:520},ease:'none',
+       scrollTrigger:{trigger:'.csl-title-wrap',start:'top 65%',end:'top -10%',scrub:2}}
     );
   }
 });
