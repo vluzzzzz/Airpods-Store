@@ -660,10 +660,9 @@ body {
 
 
 /* =============================================
-   RESPONSIVE MOBILE — v3 (bugfix)
+   RESPONSIVE MOBILE — v4
    ============================================= */
 
-/* ── ≤ 900px: ocultar nav links ── */
 @media (max-width: 900px) {
   .nav-center { display: none; }
   .nav { padding: 0 24px; }
@@ -673,7 +672,6 @@ body {
   .porque-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 16px !important; max-width: 100% !important; }
 }
 
-/* ── ≤ 768px ── */
 @media (max-width: 768px) {
 
   /* NAVBAR */
@@ -698,11 +696,7 @@ body {
   .price-block { left: 20px !important; bottom: 144px !important; }
   .price { font-size: 30px !important; }
   .price-label { font-size: 9px !important; }
-  .liquid-btn {
-    bottom: 82px !important;
-    padding: 17px 44px !important;
-    font-size: 15px !important;
-  }
+  .liquid-btn { bottom: 82px !important; padding: 17px 44px !important; font-size: 15px !important; }
   .liquid-btn:hover  { transform: translateX(-50%) scale(1.04) !important; }
   .liquid-btn:active { transform: translateX(-50%) scale(0.97) !important; }
   .dots { bottom: 46px !important; }
@@ -720,11 +714,7 @@ body {
   #productos { padding: 72px 16px; }
   .productos-titulo { font-size: clamp(44px, 11vw, 64px) !important; }
   .productos-header { margin-bottom: 36px; }
-  .productos-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 12px !important;
-    padding: 0 !important;
-  }
+  .productos-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; padding: 0 !important; }
   .card-info { padding: 14px 14px 16px !important; }
   .card-name  { font-size: 13px !important; line-height: 1.25 !important; }
   .card-price { font-size: 20px !important; margin-bottom: 12px !important; }
@@ -732,21 +722,13 @@ body {
 
   /* POR QUÉ ELEGIRNOS */
   .porque-section { padding: 72px 16px; }
-  .porque-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 14px !important;
-    max-width: 100% !important;
-  }
+  .porque-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 14px !important; max-width: 100% !important; }
   .porque-card { padding: 24px 18px 20px !important; }
   .porque-icon { margin-bottom: 16px !important; }
 
   /* CONTACTO */
   .contacto-section { padding: 72px 16px; }
-  .contacto-grid {
-    grid-template-columns: 1fr !important;
-    max-width: 100% !important;
-    gap: 20px !important;
-  }
+  .contacto-grid { grid-template-columns: 1fr !important; max-width: 100% !important; gap: 20px !important; }
   .contacto-cta { padding: 32px 24px !important; border-radius: 20px !important; }
   .contacto-cta-text { font-size: 17px !important; }
   .contacto-wa-btn { padding: 16px 24px !important; }
@@ -754,45 +736,31 @@ body {
   /* FOOTER */
   .footer { padding: 36px 20px; }
   .footer-nav { gap: 18px; }
-  .footer-nav a { font-size: 13px; }
 
-  /* CARRITO DRAWER */
+  /* CARRITO */
   .cart-drawer { width: 100% !important; max-width: 100% !important; }
 
   /* ══════════════════════════════════════════════
      PPAGE — MODAL PRODUCTO MOBILE
 
-     IMPORTANTE: NO usar display !important aquí.
-     El JS hace ppage.style.display = 'none' al init
-     y 'flex' al abrir — si ponemos display:flex !important
-     el modal aparece desde el inicio sin presionar nada.
+     El JS ahora usa inset:0 (sin width/height hardcodeado).
+     Acá solo ajustamos flex-direction, overflow, height dvh.
+     SIN display:flex !important (el JS maneja display).
      ══════════════════════════════════════════════ */
 
   .ppage {
-    /* Posición: inset:0 pisa el left/top del JS y agrega right/bottom */
-    position: fixed !important;
-    inset: 0 !important;
-
-    /* Tamaño: pisa el 100vw/100vh del JS.
-       - 100% en fixed = viewport sin scrollbar (mejor que 100vw)
-       - 100dvh = altura visual real, excluye barra de Android Chrome */
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 100dvh !important;
-
-    /* Layout vertical */
     flex-direction: column !important;
     border-radius: 0 !important;
     overflow: hidden !important;
     box-sizing: border-box !important;
-
-    /* SIN display: flex !important — display lo controla el JS */
+    /* height con dvh para que no se pase en Android Chrome */
+    height: 100dvh !important;
+    /* SIN display — lo controla el JS */
   }
 
-  /* ─ Panel imagen: arriba, altura fija ─ */
+  /* Panel imagen: parte superior, altura fija */
   .ppage-img-panel {
     width: 100% !important;
-    max-width: 100% !important;
     height: 44dvh !important;
     min-height: unset !important;
     flex-shrink: 0 !important;
@@ -802,12 +770,14 @@ body {
     box-sizing: border-box !important;
   }
 
+  /* Imagen principal */
   .ppage-img-wrap {
-    width: 65% !important;
-    height: 70% !important;
+    width: 60% !important;
+    height: 68% !important;
+    margin-left: 20px !important; /* desplazar para dar espacio a thumbs */
   }
 
-  /* Flecha siguiente imagen: visible y dentro del panel */
+  /* Flecha siguiente imagen */
   .ppage-img-next {
     right: 10px !important;
     width: 32px !important;
@@ -826,25 +796,24 @@ body {
   }
   .ppage-back svg { width: 14px !important; height: 14px !important; }
 
-  /* Thumbnails (carrusel) → fila horizontal abajo del panel imagen */
+  /* Thumbnails: IZQUIERDA, verticales — igual que desktop pero más pequeños */
   .ppage-thumbs {
-    display: flex !important;
-    flex-direction: row !important;
-    position: absolute !important;
-    bottom: 10px !important;
-    top: auto !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
+    left: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    flex-direction: column !important;
     gap: 6px !important;
-    z-index: 10 !important;
+    position: absolute !important;
+    display: flex !important;
   }
   .ppage-thumb {
     width: 38px !important;
     height: 38px !important;
     border-radius: 8px !important;
   }
+  .ppage-thumb img { width: 80% !important; height: 80% !important; }
 
-  /* ─ Panel info: ocupa el resto, scroll interno ─ */
+  /* Panel info: ocupa el resto, scroll interno */
   .ppage-info {
     flex: 1 !important;
     min-height: 0 !important;
@@ -860,33 +829,25 @@ body {
     border-top: 1px solid rgba(0,0,0,0.08) !important;
   }
 
-  .ppage-name {
-    font-size: clamp(20px, 5vw, 28px) !important;
-    line-height: 1.15 !important;
-  }
-  .ppage-desc {
-    font-size: 13px !important;
-    max-width: 100% !important;
-    line-height: 1.6 !important;
-  }
+  .ppage-name { font-size: clamp(20px, 5vw, 28px) !important; line-height: 1.15 !important; }
+  .ppage-desc { font-size: 13px !important; max-width: 100% !important; line-height: 1.6 !important; }
 
-  /* Tier selector */
+  /* Tier selector — sin overflow clip para que se vea el precio */
   #ppageTierWrap { width: 100% !important; box-sizing: border-box !important; }
   .ppage-tier-selected {
     padding: 13px 14px !important;
-    overflow: visible !important;
     width: 100% !important;
     box-sizing: border-box !important;
+    overflow: visible !important;
   }
   .ppage-tier-selected-text  { font-size: 13px !important; }
   .ppage-tier-selected-price { font-size: 18px !important; }
   .ppage-tier-chevron svg    { width: 15px !important; height: 15px !important; }
 
-  /* ─ Acciones:
+  /* Acciones:
      Fila 1: total + qty (ancho completo)
-     Fila 2: 🛒 (cuadrado) + Consultar (crece)
-     Fila 3: Pagar con MP (ancho completo)
-  ─ */
+     Fila 2: 🛒 (cuadrado) + Consultar (flex)
+     Fila 3: Pagar con MP (ancho completo)  */
   .ppage-actions {
     display: flex !important;
     flex-direction: row !important;
@@ -912,26 +873,14 @@ body {
     border-radius: 12px !important;
   }
   .ppage-cart-btn svg { width: 17px !important; height: 17px !important; }
-  .ppage-wa-btn {
-    flex: 1 !important;
-    min-width: 0 !important;
-    height: 50px !important;
-    font-size: 13px !important;
-  }
-  .ppage-mp-btn {
-    flex: 0 0 100% !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-    height: 50px !important;
-    font-size: 13px !important;
-  }
+  .ppage-wa-btn { flex: 1 !important; min-width: 0 !important; height: 50px !important; font-size: 13px !important; }
+  .ppage-mp-btn { flex: 0 0 100% !important; width: 100% !important; box-sizing: border-box !important; height: 50px !important; font-size: 13px !important; }
 
   .ppage-accordion { margin-top: 14px !important; }
   .ppage-accordion-header { padding: 13px 0 !important; }
   .ppage-accordion-title { font-size: 14px !important; }
 }
 
-/* ── ≤ 430px: pantallas pequeñas ── */
 @media (max-width: 430px) {
   .bg-text { font-size: 54px !important; letter-spacing: -1.5px !important; }
   .product-wrap { width: 240px !important; height: 240px !important; }
@@ -939,15 +888,12 @@ body {
   .price-block { bottom: 138px !important; }
   .liquid-btn { padding: 15px 36px !important; font-size: 14px !important; bottom: 76px !important; }
   .dots { bottom: 42px !important; }
-
   .productos-grid { gap: 10px !important; }
-  .card-info  { padding: 12px 12px 14px !important; }
-  .card-name  { font-size: 12px !important; }
+  .card-info { padding: 12px 12px 14px !important; }
+  .card-name { font-size: 12px !important; }
   .card-price { font-size: 17px !important; margin-bottom: 10px !important; }
-  .card-btn   { padding: 9px !important; font-size: 11px !important; }
-
+  .card-btn { padding: 9px !important; font-size: 11px !important; }
   .porque-grid { grid-template-columns: 1fr !important; }
-
   .ppage-img-panel { height: 38dvh !important; }
   .ppage-name { font-size: 18px !important; }
   .ppage-total-amount { font-size: 19px !important; }
