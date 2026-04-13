@@ -52,18 +52,21 @@ const PRODUCT_CONFIG = {
     productScale: 1.3,     /* EDIT: escala del PNG                 */
     productY:    -15,      /* EDIT: posición vertical px (- = arr) */
     blobYRatio:   0.88,    /* EDIT: altura blob (0=top, 1=bottom)  */
+    blobSpeed:    0.030,   /* EDIT: velocidad blob (menor = más lento y suave) */
   },
   2: { // ─── AirPods 4 ──────────────────────────
     fontSize:     '28vw',  /* EDIT: tamaño texto de fondo          */
     productScale: 1.1,     /* EDIT: escala del PNG                 */
     productY:    -10,      /* EDIT: posición vertical px           */
     blobYRatio:   0.88,    /* EDIT: altura blob                    */
+    blobSpeed:    0.030,   /* EDIT: velocidad blob                 */
   },
   3: { // ─── AirPods Max ─────────────────────────
     fontSize:     '24vw',  /* EDIT: tamaño texto de fondo          */
     productScale: 0.9,     /* EDIT: escala del PNG                 */
     productY:    -20,      /* EDIT: posición vertical px           */
     blobYRatio:   0.90,    /* EDIT: altura blob                    */
+    blobSpeed:    0.030,   /* EDIT: velocidad blob                 */
   },
 };
 
@@ -412,13 +415,13 @@ const CartButton = (() => {
 
 /* ══════════════════════════════════════════════
    MÓDULO: MASK REVEAL — blob líquido
-   Mobile: siempre activo en la parte inferior del texto
+   Mobile: siempre activo, suave, touch-aware
    ══════════════════════════════════════════════ */
 const MaskReveal = (() => {
   const N=64;
-  /* Radios del blob — en mobile: RY más pequeño = solo cubre la parte inferior */
+  /* Radios del blob. RY móvil pequeño = solo cubre parte inferior */
   const RX_DESK=220, RY_DESK=115;
-  const RX_MOB =170, RY_MOB = 48;
+  const RX_MOB =170, RY_MOB = 52;
 
   function isMob(){ return window.innerWidth <= 768; }
   function rand(){ return Math.random()*Math.PI*2; }
@@ -432,12 +435,13 @@ const MaskReveal = (() => {
     {k:1,amp:20,spd:1.7,ph:rand()},{k:2,amp:12,spd:2.5,ph:rand()},{k:3,amp:7,spd:0.9,ph:rand()},
   ];
 
-  let rafId=null,mouseX=0,mouseY=0,blobX=0,blobY=0;
+  let rafId=null, mouseX=0, mouseY=0, blobX=0, blobY=0;
   let isInside=false, scale=0, wrapRect=null, started=false;
+  let touchActive=false; /* si el dedo está tocando el texto */
 
   function cacheRect(){ wrapRect=DOM.bgTextBlueWrap.getBoundingClientRect(); }
 
-  /* Calcula la posición central del blob para el producto actual en mobile */
+  /* Posición base del blob en mobile: parte inferior del texto */
   function getMobileCenter(){
     if (!wrapRect) cacheRect();
     const cur = PRODUCTS[state.current];
@@ -447,6 +451,14 @@ const MaskReveal = (() => {
       x: wrapRect.left + wrapRect.width  * 0.5,
       y: wrapRect.top  + wrapRect.height * ratio,
     };
+  }
+
+  /* Velocidad de suavizado — per-producto en mobile, fija en desktop */
+  function getLerpFactor(){
+    if (!isMob()) return 0.055;
+    const cur = PRODUCTS[state.current];
+    const cfg = cur ? PRODUCT_CONFIG[cur.id] : null;
+    return cfg ? cfg.blobSpeed : 0.030;
   }
 
   function buildPolygon(cx,cy,t){
@@ -465,6 +477,7 @@ const MaskReveal = (() => {
 
   function animate(ts){
     const t=ts*0.001;
+    const lerp=getLerpFactor();
     scale+=((isInside?1:0)-scale)*(isInside?0.10:0.08);
     if(!isInside&&scale<0.004){
       scale=0;
@@ -472,8 +485,8 @@ const MaskReveal = (() => {
       rafId=null; return;
     }
     if(!started){ blobX=mouseX; blobY=mouseY; started=true; }
-    blobX+=(mouseX-blobX)*0.055;
-    blobY+=(mouseY-blobY)*0.055;
+    blobX+=(mouseX-blobX)*lerp;
+    blobY+=(mouseY-blobY)*lerp;
     DOM.bgTextBlueWrap.style.clipPath=buildPolygon(blobX-wrapRect.left,blobY-wrapRect.top,t);
     rafId=requestAnimationFrame(animate);
   }
@@ -484,8 +497,10 @@ const MaskReveal = (() => {
   function refreshMobile(){
     if (!isMob()) return;
     cacheRect();
-    const c=getMobileCenter();
-    mouseX=c.x; mouseY=c.y;
+    if (!touchActive){
+      const c=getMobileCenter();
+      mouseX=c.x; mouseY=c.y;
+    }
     if (!isInside){ isInside=true; started=false; }
     startLoop();
   }
@@ -494,7 +509,7 @@ const MaskReveal = (() => {
     document.fonts.ready.then(()=>{
       cacheRect();
       if(isMob()){
-        /* Mobile: auto-start con el blob en la parte inferior del texto */
+        /* Auto-start en mobile: blob en la parte inferior del texto */
         const c=getMobileCenter();
         mouseX=c.x; mouseY=c.y; blobX=c.x; blobY=c.y;
         isInside=true; started=true;
@@ -504,12 +519,12 @@ const MaskReveal = (() => {
 
     window.addEventListener('resize',()=>{
       cacheRect();
-      if(isMob() && !isInside){ refreshMobile(); }
+      if(isMob()&&!isInside) refreshMobile();
     },{passive:true});
 
     const hero=document.getElementById('hero');
 
-    /* Desktop: mouse hover */
+    /* Desktop: seguir mouse */
     hero.addEventListener('mousemove',e=>{
       if(isMob()) return;
       if(!wrapRect) cacheRect();
@@ -520,6 +535,26 @@ const MaskReveal = (() => {
       if(isMob()) return;
       isInside=false; started=false; startLoop();
     });
+
+    /* Mobile: el dedo mueve el blob, al soltar vuelve a la base */
+    hero.addEventListener('touchmove',e=>{
+      if(!isMob()) return;
+      if(!wrapRect) cacheRect();
+      touchActive=true;
+      const touch=e.touches[0];
+      mouseX=touch.clientX;
+      mouseY=touch.clientY;
+      /* Asegurarse de que el blob esté activo */
+      if(!isInside){ isInside=true; started=false; startLoop(); }
+    },{passive:true});
+
+    hero.addEventListener('touchend',()=>{
+      if(!isMob()) return;
+      touchActive=false;
+      /* Volver suavemente a la posición base */
+      const c=getMobileCenter();
+      mouseX=c.x; mouseY=c.y;
+    },{passive:true});
   }
 
   return { init, refreshMobile };
