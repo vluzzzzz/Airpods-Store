@@ -1065,14 +1065,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* =============================================
-   EMERGENCY: Restaurar scroll + blob refinado
-   ============================================= */
 
-/* ── CRÍTICO: html no debe tener overflow seteado ──
-   Cuando html tiene overflow distinto de visible,
-   el body se convierte en el scroll container y
-   en Android esto bloquea el scroll nativo. */
 html {
   overflow-x: visible !important;
   overscroll-behavior: auto !important;
@@ -1085,11 +1078,10 @@ body {
   overscroll-behavior: auto !important;
 }
 
-/* El xtape ya tiene overflow:hidden propio, eso es suficiente
-   para contener las cintas sin depender del body/html */
+
 .xtape-wrap { overflow: hidden; }
 
-/* Hero: clip correcto, sin redundancias */
+
 @media (max-width: 900px) {
   .hero {
     overflow: clip !important;
@@ -1098,15 +1090,25 @@ body {
   }
 }
 
-/* ── Blob más sutil: radio reducido ── */
-/* (Los valores de radio están en el JS: RX_MOB=120, RY_MOB=38)
-   El CSS solo necesita asegurar pointer-events:none para no
-   interferir con el scroll al tocar el texto */
+
 @media (max-width: 768px) {
   .bg-text-blue-wrap,
   .bg-text-blue,
   .bg-text-zoom {
     pointer-events: none !important;
-    touch-action: none !important; /* Solo para estos elementos, no para el body */
+    touch-action: none !important; 
   }
+}
+
+/* Eliminar el recuadro azul al tocar elementos en mobile */
+* {
+    -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none; /* Opcional: evita el menú contextual al mantener presionado */
+}
+
+/* Aseguramos que los botones y elementos cliqueables no tengan el outline de enfoque */
+button:focus, 
+a:focus, 
+div:focus {
+    outline: none !important;
 }
