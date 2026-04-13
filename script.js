@@ -42,6 +42,31 @@ const SLIDE_KEY_MAP = {
   'airpods-max': 'max-magnéticos',
 };
 
+/* ══════════════════════════════════════════════
+   PANEL DE CONTROL MANUAL POR PRODUCTO (MOBILE)
+   Editá estos valores sin romper el blob ni layout.
+   ══════════════════════════════════════════════ */
+const PRODUCT_CONFIG = {
+  1: { // ─── AirPods Pro 2 ───────────────────────
+    fontSize:     '24vw',  /* EDIT: tamaño texto de fondo          */
+    productScale: 1.3,     /* EDIT: escala del PNG                 */
+    productY:    -15,      /* EDIT: posición vertical px (- = arr) */
+    blobYRatio:   0.88,    /* EDIT: altura blob (0=top, 1=bottom)  */
+  },
+  2: { // ─── AirPods 4 ──────────────────────────
+    fontSize:     '28vw',  /* EDIT: tamaño texto de fondo          */
+    productScale: 1.1,     /* EDIT: escala del PNG                 */
+    productY:    -10,      /* EDIT: posición vertical px           */
+    blobYRatio:   0.88,    /* EDIT: altura blob                    */
+  },
+  3: { // ─── AirPods Max ─────────────────────────
+    fontSize:     '24vw',  /* EDIT: tamaño texto de fondo          */
+    productScale: 0.9,     /* EDIT: escala del PNG                 */
+    productY:    -20,      /* EDIT: posición vertical px           */
+    blobYRatio:   0.90,    /* EDIT: altura blob                    */
+  },
+};
+
 /* ══ ESTADO ══ */
 const state = { current:0, isTransitioning:false, cart:[] };
 
@@ -80,6 +105,20 @@ const ProductNav = (() => {
     DOM.productWrap.style.setProperty('--product-scale', p.scale ?? 1);
     DOM.productWrap.style.setProperty('--product-x', (p.offsetX ?? 0) + 'px');
     DOM.productWrap.style.setProperty('--product-y', (p.offsetY ?? 0) + 'px');
+
+    /* En mobile: aplicar config individual del PRODUCT_CONFIG */
+    if (window.innerWidth <= 768) {
+      const cfg = PRODUCT_CONFIG[p.id];
+      if (cfg) {
+        /* Tamaño de texto de fondo — vía custom property que el CSS consume */
+        [DOM.bgText, DOM.bgTextBlue, DOM.bgTextZoom].forEach(el => {
+          if (el) el.style.setProperty('--hero-text-size', cfg.fontSize);
+        });
+        /* Escala y posición vertical del PNG */
+        DOM.productWrap.style.setProperty('--product-scale', cfg.productScale);
+        DOM.productWrap.style.setProperty('--product-y', cfg.productY + 'px');
+      }
+    }
   }
 
   function buildDots() {
@@ -143,7 +182,15 @@ const ProductNav = (() => {
 
       function runEntrance() {
         gsap.to(stage, { x:0, opacity:1, duration:0.44, ease:'power2.out',
-          onComplete() { startFloat(); state.isTransitioning = false; } });
+          onComplete() {
+            startFloat();
+            state.isTransitioning = false;
+            /* Actualizar posición del blob en mobile al nuevo producto */
+            if (window.innerWidth <= 768 && typeof MaskReveal !== 'undefined') {
+              MaskReveal.refreshMobile();
+            }
+          }
+        });
         gsap.to(DOM.bgTextPerspective, { x:0, opacity:1, duration:0.44, ease:'power2.out' });
         if (priceEl) gsap.to(priceEl, { y:'0%', duration:0.36, ease:'power2.out', delay:0.06 });
       }
@@ -188,7 +235,25 @@ const Cart = (() => {
 
   function open() {
     if (isOpen) return; isOpen = true;
+
+    /* CART FIX: forzar todos los estilos críticos inline
+       antes de que GSAP tome control — sobreescribe cualquier
+       conflicto de z-index o stacking context */
+    DOM.cartDrawer.style.display    = 'flex';
+    DOM.cartDrawer.style.position   = 'fixed';
+    DOM.cartDrawer.style.top        = '0';
+    DOM.cartDrawer.style.right      = '0';
+    DOM.cartDrawer.style.height     = '100%';
+    DOM.cartDrawer.style.zIndex     = '9999';
+    DOM.cartDrawer.style.visibility = 'visible';
+
+    /* Forzar reflow sincrónico — resuelve el "state desync"
+       donde el browser no pintaba hasta el próximo repaint */
+    void DOM.cartDrawer.offsetHeight;
+
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
     DOM.cartOverlay.classList.add('visible');
     gsap.to(DOM.cartOverlay, { opacity:1, duration:0.4, ease:'power2.out' });
     gsap.fromTo(DOM.cartDrawer, { x:'100%' }, { x:'0%', duration:0.6, ease:'power4.out' });
@@ -199,7 +264,15 @@ const Cart = (() => {
   function close() {
     if (!isOpen) return;
     gsap.to(DOM.cartOverlay, {opacity:0,duration:0.35,ease:'power2.in',onComplete:()=>DOM.cartOverlay.classList.remove('visible')});
-    gsap.to(DOM.cartDrawer, {x:'100%',duration:0.45,ease:'power4.in',onComplete:()=>{ isOpen=false; document.body.style.overflow=''; }});
+    gsap.to(DOM.cartDrawer, {x:'100%',duration:0.45,ease:'power4.in',onComplete:()=>{
+      isOpen=false;
+      /* Limpiar los inline overrides del open() */
+      DOM.cartDrawer.style.zIndex     = '';
+      DOM.cartDrawer.style.visibility = '';
+      DOM.cartDrawer.style.display    = '';
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }});
   }
 
   function addItem(product) {
@@ -296,6 +369,11 @@ const Cart = (() => {
   }
 
   function init() {
+    /* Mover al final del body — garantiza que el carrito esté
+       FUERA de cualquier stacking context restrictivo */
+    document.body.appendChild(DOM.cartDrawer);
+    document.body.appendChild(DOM.cartOverlay);
+
     DOM.cartTrigger.addEventListener('click', open);
     DOM.closeCart.addEventListener('click', close);
     DOM.cartOverlay.addEventListener('click', close);
@@ -334,10 +412,17 @@ const CartButton = (() => {
 
 /* ══════════════════════════════════════════════
    MÓDULO: MASK REVEAL — blob líquido
+   Mobile: siempre activo en la parte inferior del texto
    ══════════════════════════════════════════════ */
 const MaskReveal = (() => {
-  const N=64, RX=220, RY=115;
-  function rand(){return Math.random()*Math.PI*2;}
+  const N=64;
+  /* Radios del blob — en mobile: RY más pequeño = solo cubre la parte inferior */
+  const RX_DESK=220, RY_DESK=115;
+  const RX_MOB =170, RY_MOB = 48;
+
+  function isMob(){ return window.innerWidth <= 768; }
+  function rand(){ return Math.random()*Math.PI*2; }
+
   const MODES=[
     {k:2,amp:46,spd:0.7,ph:rand()},{k:3,amp:30,spd:1.5,ph:rand()},
     {k:4,amp:20,spd:-0.9,ph:rand()},{k:5,amp:14,spd:2.3,ph:rand()},
@@ -346,9 +431,27 @@ const MaskReveal = (() => {
   const V_MODES=[
     {k:1,amp:20,spd:1.7,ph:rand()},{k:2,amp:12,spd:2.5,ph:rand()},{k:3,amp:7,spd:0.9,ph:rand()},
   ];
-  let rafId=null,mouseX=0,mouseY=0,blobX=0,blobY=0,isInside=false,scale=0,wrapRect=null,started=false;
-  function cacheRect(){wrapRect=DOM.bgTextBlueWrap.getBoundingClientRect();}
+
+  let rafId=null,mouseX=0,mouseY=0,blobX=0,blobY=0;
+  let isInside=false, scale=0, wrapRect=null, started=false;
+
+  function cacheRect(){ wrapRect=DOM.bgTextBlueWrap.getBoundingClientRect(); }
+
+  /* Calcula la posición central del blob para el producto actual en mobile */
+  function getMobileCenter(){
+    if (!wrapRect) cacheRect();
+    const cur = PRODUCTS[state.current];
+    const cfg = cur ? PRODUCT_CONFIG[cur.id] : null;
+    const ratio = cfg ? cfg.blobYRatio : 0.88;
+    return {
+      x: wrapRect.left + wrapRect.width  * 0.5,
+      y: wrapRect.top  + wrapRect.height * ratio,
+    };
+  }
+
   function buildPolygon(cx,cy,t){
+    const RX = isMob() ? RX_MOB : RX_DESK;
+    const RY = isMob() ? RY_MOB : RY_DESK;
     const pts=[];
     for(let i=0;i<N;i++){
       const angle=(i/N)*Math.PI*2;
@@ -359,28 +462,67 @@ const MaskReveal = (() => {
     }
     return `polygon(${pts.join(',')})`;
   }
+
   function animate(ts){
     const t=ts*0.001;
     scale+=((isInside?1:0)-scale)*(isInside?0.10:0.08);
-    if(!isInside&&scale<0.004){scale=0;DOM.bgTextBlueWrap.style.clipPath='polygon(0px 0px,0px 0px,0px 0px)';rafId=null;return;}
-    if(!started){blobX=mouseX;blobY=mouseY;started=true;}
-    blobX+=(mouseX-blobX)*0.055;blobY+=(mouseY-blobY)*0.055;
+    if(!isInside&&scale<0.004){
+      scale=0;
+      DOM.bgTextBlueWrap.style.clipPath='polygon(0px 0px,0px 0px,0px 0px)';
+      rafId=null; return;
+    }
+    if(!started){ blobX=mouseX; blobY=mouseY; started=true; }
+    blobX+=(mouseX-blobX)*0.055;
+    blobY+=(mouseY-blobY)*0.055;
     DOM.bgTextBlueWrap.style.clipPath=buildPolygon(blobX-wrapRect.left,blobY-wrapRect.top,t);
     rafId=requestAnimationFrame(animate);
   }
-  function startLoop(){if(!rafId)rafId=requestAnimationFrame(animate);}
+
+  function startLoop(){ if(!rafId) rafId=requestAnimationFrame(animate); }
+
+  /* Llamado cuando cambia el producto en mobile */
+  function refreshMobile(){
+    if (!isMob()) return;
+    cacheRect();
+    const c=getMobileCenter();
+    mouseX=c.x; mouseY=c.y;
+    if (!isInside){ isInside=true; started=false; }
+    startLoop();
+  }
+
   function init(){
-    document.fonts.ready.then(cacheRect);
-    window.addEventListener('resize',cacheRect,{passive:true});
+    document.fonts.ready.then(()=>{
+      cacheRect();
+      if(isMob()){
+        /* Mobile: auto-start con el blob en la parte inferior del texto */
+        const c=getMobileCenter();
+        mouseX=c.x; mouseY=c.y; blobX=c.x; blobY=c.y;
+        isInside=true; started=true;
+        startLoop();
+      }
+    });
+
+    window.addEventListener('resize',()=>{
+      cacheRect();
+      if(isMob() && !isInside){ refreshMobile(); }
+    },{passive:true});
+
     const hero=document.getElementById('hero');
+
+    /* Desktop: mouse hover */
     hero.addEventListener('mousemove',e=>{
+      if(isMob()) return;
       if(!wrapRect) cacheRect();
       mouseX=e.clientX; mouseY=e.clientY;
       isInside=true; startLoop();
     });
-    hero.addEventListener('mouseleave',()=>{isInside=false;started=false;startLoop();});
+    hero.addEventListener('mouseleave',()=>{
+      if(isMob()) return;
+      isInside=false; started=false; startLoop();
+    });
   }
-  return {init};
+
+  return { init, refreshMobile };
 })();
 
 /* ══════════════════════════════════════════════
@@ -697,7 +839,7 @@ const ProductModal = (() => {
     isOpen=false; currentProduct=null; originCard=null;
     document.documentElement.style.overflow='';
     document.body.style.overflow='';
-    document.body.style.touchAction='';
+    
   }
 
   function open(card){
@@ -761,10 +903,10 @@ const ProductModal = (() => {
       const cx=(originRect.left+originRect.width/2)/window.innerWidth*100;
       const cy=(originRect.top+originRect.height/2)/window.innerHeight*100;
       ppage.style.cssText=`display:flex;flex-direction:column;position:fixed;top:0;right:0;bottom:0;left:0;width:100vw;max-width:100vw;height:100dvh;margin:0;padding:0;border-radius:0;overflow:hidden;overflow-x:hidden;overflow-y:hidden;transform-origin:${cx.toFixed(2)}% ${cy.toFixed(2)}%;`;
-      /* Iron-clad scroll lock: html + body + touchAction */
+      /* Scroll lock: html + body */
       document.documentElement.style.overflow='hidden';
       document.body.style.overflow='hidden';
-      document.body.style.touchAction='none';
+      
       ppage.classList.add('active'); overlay.classList.add('active');
       overlay.style.opacity='0'; card.style.visibility='hidden';
       gsap.to(overlay,{opacity:1,duration:0.4,ease:'power2.out'});
