@@ -17,6 +17,104 @@ const PRICE_TIERS={
   'cargador-tipo-c-completo':[{qty:1,price:5000},{qty:3,price:4500},{qty:5,price:4000},{qty:10,price:3500}],
   'cargador-samsung-45w':[{qty:1,price:6000},{qty:3,price:5500},{qty:5,price:5000},{qty:10,price:4500}],
 };
+
+/* === GOOGLE SHEET INTEGRATION START === */
+// URL pública del CSV (ya publicado en Google Sheets)
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuuegzIC4CQl_Q9BPSpESwrNTBTBdKgMhlfz0Q1S0e-bPMpC_UzCeLod_dCc0e3BBUSV4ooyaQu72M/pub?output=csv';
+
+// ---------- utilidades ----------
+function slugify(str) {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[áä]/g, 'a')
+    .replace(/[éë]/g, 'e')
+    .replace(/[íï]/g, 'i')
+    .replace(/[óö]/g, 'o')
+    .replace(/[úü]/g, 'u')
+    .replace(/[^a-z0-9-]/g, '');
+}
+
+// CSV → array de filas → cada fila → array de celdas
+function parseCSV(text) {
+  return text
+    .trim()
+    .split('\n')
+    .map(row => row.split(',').map(c => c.trim()));
+}
+
+/* ---------- sincronizar hoja con la app ---------- */
+async function syncSheetToConfig() {
+  try {
+    const res = await fetch(SHEET_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const txt  = await res.text();
+    const rows = parseCSV(txt);
+
+    const DATA_START = 3; // fila 4 del sheet (índice 3)
+    const sheetProducts = [];
+
+    for (let i = DATA_START; i < rows.length - 1; i += 2) {
+      const actRow   = rows[i];     // id, nombre, stock, Si/No por tramo
+      const priceRow = rows[i + 1]; // precios por tramo
+
+      const id    = actRow[1] ?? '';
+      const name  = actRow[2] ?? '';
+      const stock = (actRow[3] ?? '').toLowerCase().startsWith('s');
+
+      if (!id) continue; // fin de la hoja
+
+      const tiers = [];
+      for (let col = 4; col <= 13; col++) {
+        const active   = (actRow[col] ?? '').toLowerCase().startsWith('s');
+        const rawPrice = priceRow[col] ?? '';
+        const price    = parseInt(rawPrice.replace(/[^0-9]/g, ''), 10) || 0;
+        const qty      = col - 3; // 4→1UN, 5→2UN … 13→10UN
+        if (active && price > 0) tiers.push({ qty, price });
+      }
+
+      // si nadie está activo, al menos tomamos el precio de 1 UN
+      if (!tiers.length && priceRow[4]) {
+        const price = parseInt(priceRow[4].replace(/[^0-9]/g, ''), 10);
+        tiers.push({ qty: 1, price });
+      }
+
+      sheetProducts.push({ id, name, stock, tiers });
+    }
+
+    // ---- aplicar a las estructuras globales ----
+    sheetProducts.forEach(({ id, stock, tiers }) => {
+      // sobrescribimos los precios por tier (usado por el modal)
+      PRICE_TIERS[id] = tiers;
+
+      // buscamos la tarjeta del producto (catalogo y carrusel)
+      const selectors = [
+        `.product-card[data-name="${id.replace(/-/g, ' ')}"]`,
+        `.csl-slide[data-name="${id.replace(/-/g, ' ')}"]`,
+        `.card[data-name="${id.replace(/-/g, ' ')}"]`
+      ];
+      const card = document.querySelector(selectors.join(','));
+
+      if (card) {
+        if (!stock) {
+          card.classList.add('out-of-stock');
+          card.setAttribute('aria-disabled', 'true');
+        } else {
+          card.classList.remove('out-of-stock');
+          card.removeAttribute('aria-disabled');
+        }
+      }
+    });
+
+    console.info('📊 Sheet sincronizada →', sheetProducts);
+  } catch (err) {
+    console.error('❗ No se pudo cargar la hoja de precios/stock:', err);
+  }
+}
+
+/* === GOOGLE SHEET INTEGRATION END === */
+
 const FEATURES={
   'airpods-pro-2':['Cancelación activa de ruido','Audio espacial personalizado','Hasta 30 horas de batería','Resistencia al agua IPX4'],
   'airpods-4ta-generación':['Audio adaptativo','Cancelación activa de ruido','Diseño rediseñado','Hasta 30 horas con estuche'],
@@ -540,9 +638,15 @@ const Carousel3D=(()=>{
   return{init};
 })();
 document.querySelectorAll('.porque-card').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('flipped')));
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async () => {
+  // 1️⃣ cargar precios y stock desde Google Sheet
+  await syncSheetToConfig();
+
+  // 2️⃣ iniciar la UI (solo después de que los datos estén listos)
   ProductNav.init();Cart.init();CartButton.init();MaskReveal.init();
   ProductsSection.init();NavScroll.init();ProductModal.init();Carousel3D.init();
+
   const rr=document.getElementById('revealRect');
-  if(rr&&typeof ScrollTrigger!=='undefined')gsap.fromTo(rr,{attr:{width:0}},{attr:{width:520},ease:'none',scrollTrigger:{trigger:'.csl-title-wrap',start:'top 65%',end:'top -10%',scrub:2}});
+  if(rr && typeof ScrollTrigger !== 'undefined')
+    gsap.fromTo(rr,{attr:{width:0}},{attr:{width:520},ease:'none',scrollTrigger:{trigger:'.csl-title-wrap',start:'top 65%',end:'top -10%',scrub:2}});
 });
