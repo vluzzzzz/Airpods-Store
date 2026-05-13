@@ -280,7 +280,49 @@ body{margin:0;background:var(--off-white);font-family:var(--font-body);color:var
 .csl-pagination .swiper-pagination-bullet-active{width:20px;border-radius:99px;background:var(--black)}
 .swiper-slide-shadow,.swiper-slide-shadow-left,.swiper-slide-shadow-right,.swiper-slide-shadow-top,.swiper-slide-shadow-bottom{display:none!important;opacity:0!important}
 
+/* ═══════════════════════════════════════════════════════
+   VIEW TRANSITIONS — CONTAINER TRANSFORM */
 
+/* ---------- PRODUCTO SIN STOCK ---------- */
+.out-of-stock {
+  opacity: .45;
+  filter: grayscale(1);
+  pointer-events: none;                /* desactiva click/hover */
+}
+
+/* Texto extra “Sin stock” bajo el precio */
+.out-of-stock .card-price::after,
+.out-of-stock .price::after,
+.out-of-stock .csl-price::after {
+  content: "Sin stock";
+  display: block;
+  font-size: .85rem;
+  color: var(--gray-mid);
+  margin-top: 4px;
+}
+
+/* Badge opcional de alerta en la esquina */
+.out-of-stock::before {
+  content: "⚠️";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 1.4rem;
+  opacity: .7;
+}
+
+   
+   CAPA 1 — card-container:
+     La CAJA de la card se expande hasta llenar la pantalla.
+     Puede distorsionarse: es solo el fondo/contenedor.
+   
+   CAPA 2 — product-hero:
+     El PNG vuela limpio: solo traslación + escala uniforme.
+     object-fit:contain evita cualquier distorsión.
+   
+   El modal UI (info, botones) aparece con fade DESPUES
+   de que el container termina de expandirse.
+   ═══════════════════════════════════════════════════════ */
 
 /* Root: corte instantáneo — solo animan los elementos nombrados */
 ::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
@@ -298,7 +340,16 @@ body{margin:0;background:var(--off-white);font-family:var(--font-body);color:var
   width:100%;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   CIERRE CARDS NORMALES
+   :root.vt-closing-card activo solo durante el cierre.
 
+   TRUCO: background:#ffffff en el GRUPO.
+   El OLD state (contenido: texto, botones) hace fade 1→0 al 50%.
+   El grupo tiene su propio fondo blanco → la caja SIEMPRE se ve
+   sólida aunque el OLD se vuelva transparente.
+   Resultado: contenido se achica y desaparece, caja blanca sólida.
+   ══════════════════════════════════════════════════════════════ */
 
 :root.vt-closing-card::view-transition-group(card-container){
   overflow: clip;
