@@ -59,24 +59,24 @@ async function syncSheetToConfig() {
       const actRow   = rows[i];     // id, nombre, stock, Si/No por tramo
       const priceRow = rows[i + 1]; // precios por tramo
 
-      const id    = actRow[1] ?? '';
-      const name  = actRow[2] ?? '';
-      const stock = (actRow[3] ?? '').toLowerCase().startsWith('s');
+      const id    = actRow[0] ?? '';
+      const name  = actRow[1] ?? '';
+      const stock = (actRow[2] ?? '').toLowerCase().startsWith('s');
 
       if (!id) continue; // fin de la hoja
 
       const tiers = [];
-      for (let col = 4; col <= 13; col++) {
+      for (let col = 3; col <= 12; col++) {
         const active   = (actRow[col] ?? '').toLowerCase().startsWith('s');
         const rawPrice = priceRow[col] ?? '';
         const price    = parseInt(rawPrice.replace(/[^0-9]/g, ''), 10) || 0;
-        const qty      = col - 3; // 4→1UN, 5→2UN … 13→10UN
+        const qty      = col - 2; // 3→1UN, 4→2UN … 12→10UN
         if (active && price > 0) tiers.push({ qty, price });
       }
 
       // si nadie está activo, al menos tomamos el precio de 1 UN
-      if (!tiers.length && priceRow[4]) {
-        const price = parseInt(priceRow[4].replace(/[^0-9]/g, ''), 10);
+      if (!tiers.length && priceRow[3]) {
+        const price = parseInt(priceRow[3].replace(/[^0-9]/g, ''), 10);
         tiers.push({ qty: 1, price });
       }
 
@@ -90,9 +90,9 @@ async function syncSheetToConfig() {
 
       // buscamos la tarjeta del producto (catalogo y carrusel)
       const selectors = [
-        `.product-card[data-name="${id.replace(/-/g, ' ')}"]`,
-        `.csl-slide[data-name="${id.replace(/-/g, ' ')}"]`,
-        `.card[data-name="${id.replace(/-/g, ' ')}"]`
+        `.product-card[data-id="${id}"]`,
+        `.csl-slide[data-id="${id}"]`,
+        `.card[data-id="${id}"]`
       ];
       const card = document.querySelector(selectors.join(','));
 
