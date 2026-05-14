@@ -51,6 +51,9 @@ function parseCSV(text) {
 }
 
 /* ---------- sincronizar hoja con la app ---------- */
+function fmt(n){
+  return '$' + n.toLocaleString('es-CL');
+}
 async function syncSheetToConfig() {
   try {
     const res = await fetch(SHEET_URL, { cache: 'no-store' });
