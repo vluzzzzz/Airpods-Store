@@ -47,7 +47,7 @@ function parseCSV(text) {
 /* ---------- sincronizar hoja con la app ---------- */
 async function syncSheetToConfig() {
   try {
-    const res = await fetch(SHEET_URL);
+    const res = await fetch(SHEET_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const txt  = await res.text();
     const rows = parseCSV(txt);
@@ -641,6 +641,9 @@ document.querySelectorAll('.porque-card').forEach(c=>c.addEventListener('click',
 document.addEventListener('DOMContentLoaded', async () => {
   // 1️⃣ cargar precios y stock desde Google Sheet
   await syncSheetToConfig();
+
+// Refresh sheet data every minute to keep prices and stock up‑to‑date
+setInterval(syncSheetToConfig, 60000);
 
   // 2️⃣ iniciar la UI (solo después de que los datos estén listos)
   ProductNav.init();Cart.init();CartButton.init();MaskReveal.init();
