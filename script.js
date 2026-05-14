@@ -38,10 +38,16 @@ function slugify(str) {
 
 // CSV → array de filas → cada fila → array de celdas
 function parseCSV(text) {
+  // Split on commas that are NOT inside double quotes.
+  // This handles values like "$30,000" that contain commas.
   return text
     .trim()
     .split('\n')
-    .map(row => row.split(',').map(c => c.trim()));
+    .map(row => {
+      const cells = row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+        .map(c => c.replace(/^"|"$/g, '').trim());
+      return cells;
+    });
 }
 
 /* ---------- sincronizar hoja con la app ---------- */
@@ -59,24 +65,26 @@ async function syncSheetToConfig() {
       const actRow   = rows[i];     // id, nombre, stock, Si/No por tramo
       const priceRow = rows[i + 1]; // precios por tramo
 
-      const id    = actRow[0] ?? '';
-      const name  = actRow[1] ?? '';
-      const stock = (actRow[2] ?? '').toLowerCase().startsWith('s');
+      // The CSV has an initial empty column, so shift indices by 1
+      const id    = actRow[1] ?? '';
+      const name  = actRow[2] ?? '';
+      const stock = (actRow[3] ?? '').toLowerCase().startsWith('s');
 
       if (!id) continue; // fin de la hoja
 
       const tiers = [];
-      for (let col = 3; col <= 12; col++) {
+      // price columns start at index 4 (1 UN) up to 13 (10 UN)
+      for (let col = 4; col <= 13; col++) {
         const active   = (actRow[col] ?? '').toLowerCase().startsWith('s');
         const rawPrice = priceRow[col] ?? '';
         const price    = parseInt(rawPrice.replace(/[^0-9]/g, ''), 10) || 0;
-        const qty      = col - 2; // 3→1UN, 4→2UN … 12→10UN
+        const qty      = col - 3; // 4→1UN, 5→2UN … 13→10UN
         if (active && price > 0) tiers.push({ qty, price });
       }
 
       // si nadie está activo, al menos tomamos el precio de 1 UN
-      if (!tiers.length && priceRow[3]) {
-        const price = parseInt(priceRow[3].replace(/[^0-9]/g, ''), 10);
+      if (!tiers.length && priceRow[4]) {
+        const price = parseInt(priceRow[4].replace(/[^0-9]/g, ''), 10);
         tiers.push({ qty: 1, price });
       }
 
@@ -361,8 +369,14 @@ const ProductModal=(()=>{
   function renderFeatures(key){const f=FEATURES[key]||[],i=document.getElementById('ppage-features-inner');if(i)i.innerHTML='<ul>'+f.map(x=>`<li>${x}</li>`).join('')+'</ul>';}
   function populate(card,key){
     const ci=getCardImg(card);
-    tiers=PRICE_TIERS[key]||[{qty:1,price:Number(card.dataset.price)}];
-    currentProduct={id:'cat-'+card.dataset.name.replace(/\s+/g,'-').toLowerCase(),name:card.dataset.name,price:fmt(tiers[0]?.price??card.dataset.price),rawPrice:tiers[0]?.price??Number(card.dataset.price),image:ci?.src||''};
+    tiers = PRICE_TIERS[key] || [{ qty: 1, price: Number(card.dataset.price) }];
+    currentProduct = {
+      id: 'cat-' + (card.dataset.id || ''),
+      name: card.dataset.name,
+      price: fmt(tiers[0]?.price ?? card.dataset.price),
+      rawPrice: tiers[0]?.price ?? Number(card.dataset.price),
+      image: ci?.src || ''
+    };
     openingImage=currentProduct.image;
     document.getElementById('ppageImg').src=currentProduct.image;
     document.getElementById('ppageImg').alt=currentProduct.name;
@@ -382,7 +396,8 @@ const ProductModal=(()=>{
   function open(card){
     if(isOpen)return;
     isOpen=true;originCard=card;qty=1;tiersOpen=false;
-    const rawKey=card.dataset.name.replace(/\s+/g,'-').toLowerCase(),key=SLIDE_KEY_MAP[rawKey]||rawKey;
+    const rawKey = card.dataset.id;
+    const key = SLIDE_KEY_MAP[rawKey] || rawKey;
     populate(card,key);
     originRect=card.getBoundingClientRect();
     const cardImg=getCardImg(card),ppageImgEl=document.getElementById('ppageImg'),ppageInfo=document.getElementById('ppageInfo');
