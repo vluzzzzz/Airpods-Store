@@ -105,6 +105,15 @@ async function syncSheetToConfig() {
       const card = document.querySelector(selectors.join(','));
 
       if (card) {
+        // actualizar precio unitario en la tarjeta (y slide) y atributo data-price
+        const priceOne = tiers.find(t => t.qty === 1);
+        if (priceOne) {
+          const formatted = fmt(priceOne.price);
+          const priceEl = card.querySelector('.card-price') || card.querySelector('.csl-price');
+          if (priceEl) priceEl.textContent = formatted;
+          // actualiza atributo data-price para que populate lo use
+          card.dataset.price = priceOne.price;
+        }
         if (!stock) {
           card.classList.add('out-of-stock');
           card.setAttribute('aria-disabled', 'true');
