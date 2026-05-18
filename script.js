@@ -130,7 +130,7 @@ async function syncSheetToConfig() {
       }
     });
 
-    console.info('📊 Sheet sincronizada →', sheetProducts);
+  // ==== Actualizar precios en la lista de productos (hero) ====\n  sheetProducts.forEach(({ name, tiers }) => {\n    const priceOne = tiers.find(t => t.qty === 1);\n    if (priceOne) {\n      const prod = PRODUCTS.find(p => p.name === name);\n      if (prod) {\n        prod.price = fmt(priceOne.price);\n        prod.rawPrice = priceOne.price;\n        // actualizar atributo data-price en los elementos hero si corresponde\n        // (si el producto está actualmente visible en el hero)\n        if (DOM.productPrice && DOM.productPrice.textContent) {\n          // No immediate DOM update here; next navigation will use updated PRODUCT data\n        }\n      }\n    }\n  });\n
   } catch (err) {
     console.error('❗ No se pudo cargar la hoja de precios/stock:', err);
   }
@@ -151,7 +151,11 @@ const FEATURES={
   'cargador-tipo-c-completo':['Cable USB-C incluido','Compatible iPhone 15+','iPad Pro y MacBook','Carga rápida 20W'],
   'cargador-samsung-45w':['Carga ultra rápida 45W','Compatible línea Galaxy','Cable USB-C incluido','Carga completa en ~1 hora'],
 };
-const SLIDE_KEY_MAP={};
+const SLIDE_KEY_MAP={
+  'airpods-4': 'airpods-4ta-generación',
+  'airpods-max': 'max-magnéticos',
+  'airpods-3': 'airpods-3ra-generación'
+};
 const PRODUCT_CONFIG={
   1:{fontSize:'22vw',productScale:1.1,productY:-15,blobYRatio:0.88,blobSpeed:0.030},
   2:{fontSize:'28vw',productScale:1.1,productY:-10,blobYRatio:0.88,blobSpeed:0.030},
