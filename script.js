@@ -1,8 +1,8 @@
 'use strict';
 const PRODUCTS=[
-  {id:1,name:'AirPods Pro 2',price:'$25.000',rawPrice:25000,image:'images/airpods.png',bgLabel:'AIRPODS PRO 2',scale:1,offsetX:0,offsetY:0},
-  {id:2,name:'AirPods 4',price:'$18.500',rawPrice:18500,image:'images/airpods4.png',bgLabel:'AIRPODS 4',scale:0.8,offsetX:0,offsetY:0},
-  {id:3,name:'AirPods Max',price:'$72.000',rawPrice:72000,image:'images/airpodsmax.png',bgLabel:'AIRPODS MAX',scale:1.4,offsetX:50,offsetY:-20},
+  {id:1,name:'AirPods Pro 2',price:'',rawPrice:0,image:'images/airpods.png',bgLabel:'AIRPODS PRO 2',scale:1,offsetX:0,offsetY:0},
+  {id:2,name:'AirPods 4',price:'',rawPrice:0,image:'images/airpods4.png',bgLabel:'AIRPODS 4',scale:0.8,offsetX:0,offsetY:0},
+  {id:3,name:'AirPods Max',price:'',rawPrice:0,image:'images/airpodsmax.png',bgLabel:'AIRPODS MAX',scale:1.4,offsetX:50,offsetY:-20},
 ];
 const PRICE_TIERS={
   'apple-watch-ultra-3':[{qty:1,price:29990},{qty:3,price:27990},{qty:5,price:25990},{qty:10,price:23990}],
@@ -150,7 +150,8 @@ sheetProducts.forEach(({ name, tiers }) => {
     }
   }
 });
-  console.info('✅ syncSheetToConfig completed');
+        console.info('✅ syncSheetToConfig completed');
+      document.body.classList.add('sheet-ready');
   } catch (err) {
     console.error('❗ No se pudo cargar la hoja de precios/stock:', err);
   }
