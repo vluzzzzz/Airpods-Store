@@ -55,11 +55,13 @@ function fmt(n){
   return '$' + n.toLocaleString('es-CL');
 }
 async function syncSheetToConfig() {
+  console.info('🔄 Syncing Google Sheet...');
   try {
     const res = await fetch(SHEET_URL, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const txt  = await res.text();
     const rows = parseCSV(txt);
+      console.info(`✅ Parsed ${rows.length} rows from Google Sheet`);
 
     const DATA_START = 3; // fila 4 del sheet (índice 3)
     const sheetProducts = [];
@@ -98,6 +100,7 @@ async function syncSheetToConfig() {
     }
 
     // ---- aplicar a las estructuras globales ----
+      console.info(`📊 Processing ${sheetProducts.length} products from sheet`);
     sheetProducts.forEach(({ id, stock, tiers }) => {
       // sobrescribimos los precios por tier (usado por el modal)
       PRICE_TIERS[id] = tiers;
@@ -131,6 +134,7 @@ async function syncSheetToConfig() {
     });
 
   // ==== Actualizar precios en la lista de productos (hero) ====\n  sheetProducts.forEach(({ name, tiers }) => {\n    const priceOne = tiers.find(t => t.qty === 1);\n    if (priceOne) {\n      const prod = PRODUCTS.find(p => p.name === name);\n      if (prod) {\n        prod.price = fmt(priceOne.price);\n        prod.rawPrice = priceOne.price;\n        // actualizar atributo data-price en los elementos hero si corresponde\n        // (si el producto está actualmente visible en el hero)\n        if (DOM.productPrice && DOM.productPrice.textContent) {\n          // No immediate DOM update here; next navigation will use updated PRODUCT data\n        }\n      }\n    }\n  });\n
+  console.info('✅ syncSheetToConfig completed');
   } catch (err) {
     console.error('❗ No se pudo cargar la hoja de precios/stock:', err);
   }
