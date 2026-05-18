@@ -69,9 +69,12 @@ async function syncSheetToConfig() {
       const priceRow = rows[i + 1]; // precios por tramo
 
       // The CSV has an initial empty column, so shift indices by 1
-      const id    = actRow[1] ?? '';
+      const rawId = actRow[1] ?? '';
       const name  = actRow[2] ?? '';
       const stock = (actRow[3] ?? '').toLowerCase().startsWith('s');
+
+      // Derive a consistent product key. Prefer the explicit ID from the sheet; if missing, generate one from the name.
+      const id = rawId && rawId.trim() !== '' ? rawId : name.toLowerCase().replace(/\s+/g, '-');
 
       if (!id) continue; // fin de la hoja
 
