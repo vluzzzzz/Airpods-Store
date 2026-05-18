@@ -105,15 +105,15 @@ async function syncSheetToConfig() {
       // sobrescribimos los precios por tier (usado por el modal)
       PRICE_TIERS[id] = tiers;
 
-      // buscamos la tarjeta del producto (catalogo y carrusel)
+      // buscamos la(s) tarjeta(s) del producto tanto en el catálogo como en el carrusel
       const selectors = [
         `.product-card[data-id="${id}"]`,
         `.csl-slide[data-id="${id}"]`,
         `.card[data-id="${id}"]`
       ];
-      const card = document.querySelector(selectors.join(','));
+      const cards = document.querySelectorAll(selectors.join(','));
 
-      if (card) {
+      cards.forEach(card => {
         // actualizar precio unitario en la tarjeta (y slide) y atributo data-price
         const priceOne = tiers.find(t => t.qty === 1);
         if (priceOne) {
@@ -130,7 +130,7 @@ async function syncSheetToConfig() {
           card.classList.remove('out-of-stock');
           card.removeAttribute('aria-disabled');
         }
-      }
+      });
     });
 
   // ==== Actualizar precios en la lista de productos (hero) ====
