@@ -133,7 +133,23 @@ async function syncSheetToConfig() {
       }
     });
 
-  // ==== Actualizar precios en la lista de productos (hero) ====\n  sheetProducts.forEach(({ name, tiers }) => {\n    const priceOne = tiers.find(t => t.qty === 1);\n    if (priceOne) {\n      const prod = PRODUCTS.find(p => p.name === name);\n      if (prod) {\n        prod.price = fmt(priceOne.price);\n        prod.rawPrice = priceOne.price;\n        // actualizar atributo data-price en los elementos hero si corresponde\n        // (si el producto está actualmente visible en el hero)\n        if (DOM.productPrice && DOM.productPrice.textContent) {\n          // No immediate DOM update here; next navigation will use updated PRODUCT data\n        }\n      }\n    }\n  });\n
+  // ==== Actualizar precios en la lista de productos (hero) ====
+sheetProducts.forEach(({ name, tiers }) => {
+  const priceOne = tiers.find(t => t.qty === 1);
+  if (priceOne) {
+    const prod = PRODUCTS.find(p => p.name === name);
+    if (prod) {
+      prod.price = fmt(priceOne.price);
+      prod.rawPrice = priceOne.price;
+      // Si el héroe está mostrando este producto, actualizar su UI
+      if (DOM.productPrice && PRODUCTS[state.current] && PRODUCTS[state.current].name === name) {
+        DOM.productPrice.textContent = fmt(priceOne.price);
+        // opcional: actualizar atributo data-price en la imagen si se usa
+        DOM.productImg.dataset.price = priceOne.price;
+      }
+    }
+  }
+});
   console.info('✅ syncSheetToConfig completed');
   } catch (err) {
     console.error('❗ No se pudo cargar la hoja de precios/stock:', err);
