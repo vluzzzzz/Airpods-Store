@@ -18,11 +18,9 @@ const PRICE_TIERS={
   'cargador-samsung-45w':[{qty:1,price:6000},{qty:3,price:5500},{qty:5,price:5000},{qty:10,price:4500}],
 };
 
-/* === GOOGLE SHEET INTEGRATION START === */
-// URL pública del CSV (ya publicado en Google Sheets)
+
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTuuegzIC4CQl_Q9BPSpESwrNTBTBdKgMhlfz0Q1S0e-bPMpC_UzCeLod_dCc0e3BBUSV4ooyaQu72M/pub?output=csv';
 
-// ---------- utilidades ----------
 function slugify(str) {
   return str
     .toLowerCase()
@@ -36,10 +34,7 @@ function slugify(str) {
     .replace(/[^a-z0-9-]/g, '');
 }
 
-// CSV → array de filas → cada fila → array de celdas
 function parseCSV(text) {
-  // Split on commas that are NOT inside double quotes.
-  // This handles values like "$30,000" that contain commas.
   return text
     .trim()
     .split('\n')
@@ -50,7 +45,6 @@ function parseCSV(text) {
     });
 }
 
-/* ---------- sincronizar hoja con la app ---------- */
 function fmt(n){
   return '$' + n.toLocaleString('es-CL');
 }
@@ -63,25 +57,23 @@ async function syncSheetToConfig() {
     const rows = parseCSV(txt);
       console.info(`✅ Parsed ${rows.length} rows from Google Sheet`);
 
-    const DATA_START = 3; // fila 4 del sheet (índice 3)
+    const DATA_START = 3; 
     const sheetProducts = [];
 
     for (let i = DATA_START; i < rows.length - 1; i += 2) {
-      const actRow   = rows[i];     // id, nombre, stock, Si/No por tramo
-      const priceRow = rows[i + 1]; // precios por tramo
+      const actRow   = rows[i];     
+      const priceRow = rows[i + 1]; 
 
-      // The CSV has an initial empty column, so shift indices by 1
       const rawId = actRow[1] ?? '';
       const name  = actRow[2] ?? '';
       const stock = (actRow[3] ?? '').toLowerCase().startsWith('s');
 
-      // Derive a consistent product key. Prefer the explicit ID from the sheet; if missing, generate one from the name.
       const id = rawId && rawId.trim() !== '' ? rawId : name.toLowerCase().replace(/\s+/g, '-');
 
-      if (!id) continue; // fin de la hoja
+      if (!id) continue; 
 
       const tiers = [];
-      // price columns start at index 4 (1 UN) up to 13 (10 UN)
+      
       for (let col = 4; col <= 13; col++) {
         const active   = (actRow[col] ?? '').toLowerCase().startsWith('s');
         const rawPrice = priceRow[col] ?? '';
@@ -90,7 +82,7 @@ async function syncSheetToConfig() {
         if (active && price > 0) tiers.push({ qty, price });
       }
 
-      // si nadie está activo, al menos tomamos el precio de 1 UN
+      
       if (!tiers.length && priceRow[4]) {
         const price = parseInt(priceRow[4].replace(/[^0-9]/g, ''), 10);
         tiers.push({ qty: 1, price });
@@ -99,13 +91,13 @@ async function syncSheetToConfig() {
       sheetProducts.push({ id, name, stock, tiers });
     }
 
-    // ---- aplicar a las estructuras globales ----
+    
       console.info(`📊 Processing ${sheetProducts.length} products from sheet`);
     sheetProducts.forEach(({ id, stock, tiers }) => {
-      // sobrescribimos los precios por tier (usado por el modal)
+      
       PRICE_TIERS[id] = tiers;
 
-      // buscamos la(s) tarjeta(s) del producto tanto en el catálogo como en el carrusel
+      
       const selectors = [
         `.product-card[data-id="${id}"]`,
         `.csl-slide[data-id="${id}"]`,
@@ -114,13 +106,13 @@ async function syncSheetToConfig() {
       const cards = document.querySelectorAll(selectors.join(','));
 
       cards.forEach(card => {
-        // actualizar precio unitario en la tarjeta (y slide) y atributo data-price
+        
         const priceOne = tiers.find(t => t.qty === 1);
         if (priceOne) {
           const formatted = fmt(priceOne.price);
           const priceEl = card.querySelector('.card-price') || card.querySelector('.csl-price');
           if (priceEl) priceEl.textContent = formatted;
-          // actualiza atributo data-price para que populate lo use
+          
           card.dataset.price = priceOne.price;
         }
         if (!stock) {
@@ -133,7 +125,7 @@ async function syncSheetToConfig() {
       });
     });
 
-  // ==== Actualizar precios en la lista de productos (hero) ====
+  
 sheetProducts.forEach(({ name, tiers }) => {
   const priceOne = tiers.find(t => t.qty === 1);
   if (priceOne) {
@@ -141,10 +133,10 @@ sheetProducts.forEach(({ name, tiers }) => {
     if (prod) {
       prod.price = fmt(priceOne.price);
       prod.rawPrice = priceOne.price;
-      // Si el héroe está mostrando este producto, actualizar su UI
+      
       if (DOM.productPrice && PRODUCTS[state.current] && PRODUCTS[state.current].name === name) {
         DOM.productPrice.textContent = fmt(priceOne.price);
-        // opcional: actualizar atributo data-price en la imagen si se usa
+        
         DOM.productImg.dataset.price = priceOne.price;
       }
     }
@@ -157,7 +149,7 @@ sheetProducts.forEach(({ name, tiers }) => {
   }
 }
 
-/* === GOOGLE SHEET INTEGRATION END === */
+
 
 const FEATURES={
   'airpods-pro-2':['Cancelación activa de ruido','Audio espacial personalizado','Hasta 30 horas de batería','Resistencia al agua IPX4'],
@@ -332,29 +324,7 @@ const MaskReveal=(()=>{
   return{init,refreshMobile};
 })();
 
-/* ═══════════════════════════════════════════════════════════════
-   PRODUCT MODAL — Container Transform (v3 — ghost-free)
 
-   card-container → la CAJA se expande/compacta (puede distorsionar)
-   product-hero   → el PNG vuela SIN distorsión (object-fit:contain)
-
-   FIX 1 — Ghost PNG en cierre:
-   • ppageImgEl.style.opacity='0' DENTRO del callback (antes del
-     snapshot "new"), así el browser nunca ve el PNG del modal
-     solapado con el PNG de la card en el último frame.
-   • VT names se limpian en vt.finished Y en el callback mismo.
-
-   FIX 2 — UI sync:
-   • ppage-info arranca opacity:0 pero el fade-in GSAP empieza
-     inmediatamente después de que el startViewTransition retorna
-     (simultáneo con el vuelo), no después de vt.finished.
-   • Duración 0.30s — llega a 1 cuando el PNG está en posición.
-
-   FIX 3 — Handover refinado en cierre:
-   • cardImg.src se actualiza ANTES del VT (en la img ya decodificada).
-   • card.style.visibility='' antes de que el browser tome el
-     snapshot "new", garantizando que sea visible desde frame 0.
-═══════════════════════════════════════════════════════════════ */
 const ProductModal=(()=>{
   let isOpen=false,originCard=null,originRect=null,qty=1,tiers=[],currentProduct=null,tiersOpen=false;
   let imgIndex=0,imgList=[],isTemp=false,openingImage='',isAnimImg=false;
@@ -364,7 +334,7 @@ const ProductModal=(()=>{
   const lockScroll=()=>{document.documentElement.style.overflow='hidden';document.body.style.overflow='hidden';};
   const unlockScroll=()=>{document.documentElement.style.overflow='';document.body.style.overflow='';};
 
-  /* Limpieza total de VT names — llamar SIEMPRE después de vt.finished */
+
   function cleanAllVT(card){
     const ci=getCardImg(card),pi=document.getElementById('ppageImg');
     if(card){card.style.viewTransitionName='';card.style.visibility='';}
@@ -430,9 +400,7 @@ const ProductModal=(()=>{
     if(card.classList.contains('csl-slide')){isTemp=true;updateArrow();renderTempThumbs();}
   }
 
-  /* ════════════════════════════════════════════
-     OPEN — Container Transform
-     ════════════════════════════════════════════ */
+
   function open(card){
     if(isOpen)return;
     isOpen=true;originCard=card;qty=1;tiersOpen=false;
@@ -442,7 +410,7 @@ const ProductModal=(()=>{
     originRect=card.getBoundingClientRect();
     const cardImg=getCardImg(card),ppageImgEl=document.getElementById('ppageImg'),ppageInfo=document.getElementById('ppageInfo');
 
-    /* ── FALLBACK: mobile / sin VT API ── */
+
     if(!document.startViewTransition||window.innerWidth<=900){
       const cx=(originRect.left+originRect.width/2)/window.innerWidth*100,cy=(originRect.top+originRect.height/2)/window.innerHeight*100;
       ppage.style.cssText=`display:flex;flex-direction:column;position:fixed;top:0;right:0;bottom:0;left:0;width:100vw;max-width:100vw;height:100dvh;margin:0;padding:0;border-radius:0;overflow:hidden;transform-origin:${cx.toFixed(2)}% ${cy.toFixed(2)}%;`;
@@ -453,34 +421,24 @@ const ProductModal=(()=>{
       return;
     }
 
-    /* ── VT APERTURA ──
-       OLD state: card (card-container) + cardImg (product-hero)
-       NEW state: ppage (card-container) + ppageImgEl (product-hero)
-    */
-
-    /* UI empieza grande y desplazada — como si viniera del estado fullscreen.
-       Se achica y baja a su posición final mientras la caja termina de expandirse. */
+  
     if(ppageInfo){ppageInfo.style.opacity='0';ppageInfo.style.transform='scale(1.28) translateY(32px)';}
     const ppageBack=document.getElementById('ppageBack');
     if(ppageBack){ppageBack.style.opacity='0';ppageBack.style.transform='scale(1.04) translateY(-10px)';}
 
-    /* Asignar nombres al OLD state */
     card.style.viewTransitionName='card-container';
     if(cardImg){cardImg.style.transition='none';void cardImg.offsetHeight;cardImg.style.viewTransitionName='product-hero';}
 
     const vt=document.startViewTransition(()=>{
-      /* Quitar de la card */
       card.style.viewTransitionName='';
       if(cardImg){cardImg.style.viewTransitionName='';cardImg.style.transition='';}
       card.style.visibility='hidden';
 
-      /* Montar modal fullscreen */
       ppage.style.display='flex';ppage.style.position='fixed';ppage.style.inset='0';
       ppage.style.width='100vw';ppage.style.height='100dvh';
       ppage.style.margin='0';ppage.style.padding='0';ppage.style.borderRadius='0';ppage.style.overflow='hidden';
       ppage.style.transform='';ppage.style.transformOrigin='';
 
-      /* Asignar nombres al NEW state */
       ppage.style.viewTransitionName='card-container';
       ppageImgEl.style.transition='none';
       ppageImgEl.style.viewTransitionName='product-hero';
@@ -489,12 +447,9 @@ const ProductModal=(()=>{
       lockScroll();
     });
 
-    /* FIX 2: Fade-in del UI SIMULTANEO al vuelo — no esperar vt.finished */
     vt.ready.then(()=>{
-      /* ppageInfo: el contenedor sube a su posición (wrapper) */
       if(ppageInfo) gsap.to(ppageInfo,{opacity:1,scale:1,y:0,duration:.38,ease:'power3.out'});
 
-      /* Elementos internos: stagger individual — cada uno entra escalonado */
       const els=[
         ppageInfo?.querySelector('.ppage-name'),
         ppageInfo?.querySelector('.ppage-desc'),
@@ -503,17 +458,15 @@ const ProductModal=(()=>{
         document.getElementById('ppageAccordions'),
       ].filter(Boolean);
 
-      /* Cada elemento parte invisible y desplazado abajo */
       gsap.set(els,{opacity:0,y:14});
       gsap.to(els,{
         opacity:1, y:0,
         duration:.30,
         ease:'power2.out',
-        stagger:.06,        /* 60ms entre cada elemento */
-        delay:.10,          /* empieza cuando la caja ya casi llegó */
+        stagger:.06,     
+        delay:.10,        
       });
 
-      /* Botón Volver */
       if(ppageBack) gsap.to(ppageBack,{opacity:1,scale:1,y:0,duration:.24,ease:'power2.out',delay:.06});
     }).catch(()=>{
       if(ppageInfo){ppageInfo.style.opacity='1';ppageInfo.style.transform='';}
@@ -522,10 +475,8 @@ const ProductModal=(()=>{
 
     vt.finished
       .then(()=>{
-        /* Limpiar VT names del modal */
         ppage.style.viewTransitionName='';
         ppageImgEl.style.viewTransitionName='';ppageImgEl.style.transition='';
-        /* Restaurar por si el fade-in no completó */
         if(ppageInfo){ppageInfo.style.opacity='1';ppageInfo.style.transform='';}
         if(ppageBack){ppageBack.style.opacity='1';ppageBack.style.transform='';}
       })
@@ -536,21 +487,16 @@ const ProductModal=(()=>{
       });
   }
 
-  /* ════════════════════════════════════════════
-     CLOSE — Container compacta a card (ghost-free)
-     ════════════════════════════════════════════ */
+
   function close(){
     if(!isOpen||!originRect)return;
     const card=originCard,cardImg=getCardImg(card),ppageImgEl=document.getElementById('ppageImg'),iw=document.getElementById('ppageImgWrap');
 
-    /* ¿Es una card normal (no slide de carrusel)? */
     const isNormalCard=!card?.classList.contains('csl-slide');
 
-    /* Limpiar transforms residuales de GSAP */
     gsap.killTweensOf(iw);gsap.killTweensOf(ppageImgEl);
     if(iw){iw.style.transform='';iw.style.opacity='';iw.style.setProperty('--ppage-img-scale','1');}
 
-    /* ── FALLBACK ── */
     if(!document.startViewTransition||window.innerWidth<=900){
       let r=originRect;if(card){const f=card.getBoundingClientRect();if(f.width>0)r=f;}
       const cx=(r.left+r.width/2)/window.innerWidth*100,cy=(r.top+r.height/2)/window.innerHeight*100;
@@ -579,16 +525,10 @@ const ProductModal=(()=>{
       if(cardImg&&closingImgSrc)cardImg.src=closingImgSrc;
       void ppageImgEl?.offsetHeight;
 
-      /* Para cards normales: los elementos de UI (texto, botones, thumbs)
-         reciben su propio VT name — el browser los extrae del snapshot de ppage.
-         El "hueco" que dejan en ppage es blanco (= fondo del modal) → seamless.
-         CSS los desvanece gradualmente. ppage (card-container) no se toca: 
-         el fondo blanco contrae completo sin fade. */
+
       if(isNormalCard) document.documentElement.classList.add('vt-closing-card');
 
-      /* Sin VT names en el UI. Todo dentro del snapshot de card-container.
-         El OLD state (contenido) hace fade via CSS. El grupo tiene
-         background:#fff → caja siempre sólida aunque el contenido desaparezca. */
+    
       ppage.style.viewTransitionName='card-container';
       ppageImgEl.style.viewTransitionName='product-hero';
 
@@ -641,7 +581,6 @@ const ProductModal=(()=>{
     document.getElementById('ppageTierSelected')?.addEventListener('click',toggleTiers);
     document.getElementById('ppageImgNext')?.addEventListener('click',()=>goToImg(imgIndex+1));
 
-    /* ── Swipe en mobile sobre el panel de imagen ── */
     const panel=document.getElementById('ppageImgPanel');
     if(panel){
       let tx=0,ty=0;
@@ -694,13 +633,10 @@ const Carousel3D=(()=>{
 })();
 document.querySelectorAll('.porque-card').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('flipped')));
 document.addEventListener('DOMContentLoaded', async () => {
-  // 1️⃣ cargar precios y stock desde Google Sheet
   await syncSheetToConfig();
 
-// Refresh sheet data every minute to keep prices and stock up‑to‑date
 setInterval(syncSheetToConfig, 60000);
 
-  // 2️⃣ iniciar la UI (solo después de que los datos estén listos)
   ProductNav.init();Cart.init();CartButton.init();MaskReveal.init();
   ProductsSection.init();NavScroll.init();ProductModal.init();Carousel3D.init();
 
